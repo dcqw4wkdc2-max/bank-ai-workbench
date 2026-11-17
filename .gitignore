@@ -1,0 +1,32 @@
+# 依赖
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# 环境与密钥
+.env
+.env.*
+*.key
+*账号密码*
+账号密码表.xlsx
+secrets/
+*.pem
+
+# 运行产物
+logs/
+*.log
+dist/
+build/
+.pytest_cache/
+*.db
+*.sqlite
+*.db-wal
+*.db-shm
+
+# 系统
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
