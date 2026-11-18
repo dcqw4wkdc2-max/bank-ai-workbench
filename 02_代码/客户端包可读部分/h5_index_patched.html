@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>微光银行 · 客户反馈</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#eef1f5;color:#26303a;display:flex;justify-content:center}
+  .phone{width:100%;max-width:480px;min-height:100%;background:#eef1f5;display:flex;flex-direction:column;position:relative}
+  .hd{background:#16243d;color:#fff;padding:14px 16px 12px;position:sticky;top:0;z-index:5}
+  .hd h1{font-size:16px;font-weight:600;letter-spacing:.5px}
+  .hd p{font-size:10.5px;color:#9fb2cc;margin-top:2px}
+  .tabs{display:flex;background:#fff;border-bottom:1px solid #e3e8ee;position:sticky;top:56px;z-index:5}
+  .tabs button{flex:1;border:0;background:none;padding:11px 0;font-size:13.5px;color:#7b8794;cursor:pointer}
+  .tabs button.on{color:#16243d;font-weight:600;box-shadow:inset 0 -2px 0 #16243d}
+  .page{flex:1;padding:14px 14px 90px;display:none}
+  .page.on{display:block}
+  .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(22,36,61,.06)}
+  .lbl{font-size:12px;color:#7b8794;margin:14px 0 8px}
+  .lbl:first-child{margin-top:0}
+  .chips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .chips button{border:1px solid #d7dee6;background:#f7f9fb;border-radius:9px;padding:11px 0;
+    font-size:13.5px;color:#4a5866;cursor:pointer;transition:.15s}
+  .chips button.on{background:#16243d;border-color:#16243d;color:#fff;font-weight:600}
+  textarea{width:100%;height:110px;border:1px solid #d7dee6;border-radius:9px;padding:10px 12px;
+    font-size:14px;resize:none;font-family:inherit;color:#26303a}
+  textarea:focus{outline:none;border-color:#16243d}
+  .cnt{font-size:10.5px;color:#9aa6b2;text-align:right;margin-top:4px}
+  .btn{width:100%;border:0;border-radius:9px;padding:13px 0;font-size:15px;font-weight:600;
+    background:#16243d;color:#fff;cursor:pointer;margin-top:16px}
+  .btn:disabled{opacity:.45}
+  .btn.ghost{background:#fff;color:#16243d;border:1px solid #c6cfda;margin-top:8px;font-weight:500}
+  .item{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:9px;cursor:pointer;
+    box-shadow:0 1px 2px rgba(22,36,61,.05)}
+  .item .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .item .r1 b{font-size:12.5px;color:#16243d;font-family:Consolas,monospace}
+  .item .r2{font-size:12px;color:#7b8794;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip{display:inline-block;padding:1.5px 9px;border-radius:999px;font-size:10.5px;font-weight:600;white-space:nowrap}
+  .st-SUBMITTED{background:#eceff1;color:#546e7a}
+  .st-AI_ANSWERING{background:#e3f2fd;color:#1565c0}
+  .st-CLOSED_AI{background:#e0f2f1;color:#00695c}
+  .st-PENDING_HUMAN{background:#ffebee;color:#c62828}
+  .st-HUMAN_ANSWERING{background:#fff8e1;color:#b26a00}
+  .st-CLOSED_HUMAN{background:#e8eaf6;color:#3949ab}
+  .st-UNKNOWN{background:#eceff1;color:#78909c}
+  .empty{text-align:center;color:#9aa6b2;font-size:13px;padding:40px 0}
+  .chat{padding:0}
+  .msgs{height:calc(100vh - 210px);min-height:300px;overflow-y:auto;padding:14px 12px}
+  .m{max-width:78%;margin-bottom:12px;position:relative}
+  .m .who{font-size:10px;color:#9aa6b2;margin-bottom:3px}
+  .m .bub{padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.55;word-break:break-all}
+  .m.in{margin-right:auto}
+  .m.in .bub{background:#fff;border:1px solid #e3e8ee;border-top-left-radius:3px}
+  .m.out{margin-left:auto}
+  .m.out .bub{background:#16243d;color:#fff;border-top-right-radius:3px}
+  .sys{text-align:center;font-size:10.5px;color:#90a4ae;margin:10px 0}
+  .rate{display:flex;gap:8px;padding:0 12px 10px}
+  .rate button{flex:1;border:1px solid #c6cfda;background:#fff;border-radius:8px;padding:9px 0;
+    font-size:13px;color:#16243d;cursor:pointer}
+  .rate button:disabled{opacity:.5}
+  .inputbar{display:flex;gap:8px;padding:10px 12px;border-top:1px solid #e3e8ee;background:#fff}
+  .inputbar textarea{flex:1;height:40px;border-radius:9px}
+  .inputbar button{border:0;border-radius:9px;padding:0 18px;background:#16243d;color:#fff;
+    font-size:13.5px;font-weight:600;cursor:pointer}
+  .hint{max-width:480px;width:100%;margin:0 auto}
+  .demo-note{max-width:480px;margin:14px auto 0;background:#fff;border-radius:10px;padding:10px 14px;
+    font-size:11px;color:#7b8794;line-height:1.7}
+  .toast{position:fixed;left:50%;top:38%;transform:translateX(-50%);background:rgba(22,36,61,.92);
+    color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;z-index:99;display:none}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="hd">
+    <h1>微光银行 · 客户反馈</h1>
+    <p>数据不出内网 · AI 只建议不裁决 · 全链路审计</p>
+  </div>
+  <div class="tabs" id="tabs">
+    <button data-v="home" class="on">提交反馈</button>
+    <button data-v="list">我的反馈</button>
+  </div>
+
+  <!-- 提单 -->
+  <div class="page on" id="pg-home">
+    <div class="card">
+      <div class="lbl">选择业务类型</div>
+      <div class="chips" id="cats"></div>
+      <div class="lbl">反馈内容</div>
+      <textarea id="txt" maxlength="500" placeholder="请描述您的问题或建议（1-500 字）"></textarea>
+      <div class="cnt"><span id="n">0</span>/500</div>
+      <button class="btn" id="submit">提交反馈</button>
+      <p style="font-size:10.5px;color:#9aa6b2;margin-top:12px;line-height:1.6">
+        提交后由 AI 客服先行为您解答；如需人工服务，在会话中回复「转人工」即可。
+        涉及卡号、手机号等敏感信息会被系统自动脱敏。</p>
+    </div>
+  </div>
+
+  <!-- 列表 -->
+  <div class="page" id="pg-list">
+    <div id="ticket-list"></div>
+    <div class="card" style="margin-top:6px">
+      <div class="lbl">凭工单号查询</div>
+      <div style="display:flex;gap:8px">
+        <input id="qid" placeholder="输入 FB 开头的工单号"
+          style="flex:1;border:1px solid #d7dee6;border-radius:9px;padding:10px 12px;font-size:13px">
+        <button class="btn" style="width:auto;margin:0;padding:0 18px" id="qbtn">查询</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 会话 -->
+  <div class="page" id="pg-chat">
+    <div class="card chat">
+      <div class="msgs" id="msgs"></div>
+      <div class="rate" id="rate" hidden>
+        <button data-v="1">👍 满意</button>
+        <button data-v="0">👎 不满意</button>
+      </div>
+      <div class="inputbar" id="ibar">
+        <textarea id="reply" maxlength="500" placeholder="输入消息…"></textarea>
+        <button id="send">发送</button>
+      </div>
+    </div>
+  </div>
+
+<div class="toast" id="toast"></div>
+</div>
+<script>
+const CAT = {ACCOUNT:'账户', LOAN:'贷款', CREDIT_CARD:'信用卡', OTHER:'其他'};
+const ST = {SUBMITTED:'已受理', AI_ANSWERING:'AI 应答中', CLOSED_AI:'AI 已回复',
+  PENDING_HUMAN:'待人工接管', HUMAN_ANSWERING:'人工处理中', CLOSED_HUMAN:'已办结', UNKNOWN:'查询失败'};
+const $ = s => document.querySelector(s);
+
+// 伪 openid（与小程序同逻辑：本地生成、长期稳定；生产应 code2session 换取）
+let openid = localStorage.getItem('fb_openid');
+if (!openid) {
+  openid = 'oPoc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('fb_openid', openid);
+}
+let fbList = JSON.parse(localStorage.getItem('fb_list') || '[]');
+let curFb = null, curTicket = null, timer = null, rated = false, cat = 'OTHER';
+
+async function api(path, method='GET', data) {
+  const opt = {method, headers:{'Content-Type':'application/json'}};
+  if (data) opt.body = JSON.stringify(data);
+  const r = await fetch(path, opt);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || ('HTTP ' + r.status));
+  return d;
+}
+function toast(m) {
+  const t = $('#toast'); t.textContent = m; t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 2200);
+}
+function chip(st) {
+  return `<span class="chip st-${st}">${ST[st] || st}</span>`;
+}
+function show(v) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  $('#pg-' + v).classList.add('on');
+  if (v === 'list') renderList();
+  if (v === 'home') { clearInterval(timer); timer = null; }
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
+
+// 提单页
+$('#cats').innerHTML = Object.entries(CAT).map(([k, v]) =>
+  `<button data-k="${k}" class="${k === cat ? 'on' : ''}">${v}</button>`).join('');
+document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
+  cat = b.dataset.k;
+  document.querySelectorAll('#cats button').forEach(x => x.classList.toggle('on', x.dataset.k === cat));
+});
+$('#txt').oninput = e => $('#n').textContent = e.target.value.length;
+$('#submit').onclick = async () => {
+  const body = $('#txt').value.trim();
+  if (!body) return toast('请填写反馈内容');
+  const btn = $('#submit'); btn.disabled = true;
+  try {
+    const d = await api('/feedback/api/v1/tickets', 'POST', {openid, category: cat, body});
+    $('#txt').value = ''; $('#n').textContent = '0';
+    if (!fbList.includes(d.fb_id)) { fbList.unshift(d.fb_id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
+    toast(d.verdict === 'pass' ? '提交成功，AI 正在处理' : '已受理');
+    openChat(d.fb_id);
+  } catch (e) { toast('提交失败：' + e.message); }
+  btn.disabled = false;
+};
+
+// 列表页
+async function renderList() {
+  const box = $('#ticket-list');
+  if (!fbList.length) { box.innerHTML = '<div class="empty">暂无反馈记录</div>'; return; }
+  box.innerHTML = fbList.map(fb => `<div class="item" id="it-${fb}"><div class="r1"><b>${fb}</b><span class="chip st-UNKNOWN">加载中</span></div><div class="r2">…</div></div>`).join('');
+  fbList.forEach(async fb => {
+    const el = document.getElementById('it-' + fb);
+    try {
+      const d = await api('/feedback/api/v1/tickets/' + fb + '?openid=' + encodeURIComponent(openid));
+      el.querySelector('.r1 span').outerHTML = chip(d.status);
+      const last = (d.replies || []).slice(-1)[0];
+      el.querySelector('.r2').textContent = CAT[d.category] + ' · ' + (last ? desensitize(last.body).slice(0, 26) : '（无消息）');
+      el.onclick = () => openChat(fb);
+    } catch (e) {
+      el.querySelector('.r1 span').outerHTML = chip('UNKNOWN');
+      el.querySelector('.r2').textContent = e.message;
+    }
+  });
+}
+$('#qbtn').onclick = async () => {
+  const id = $('#qid').value.trim();
+  if (!id) return;
+  try {
+    await api('/feedback/api/v1/tickets/' + id + '?openid=' + encodeURIComponent(openid));
+    if (!fbList.includes(id)) { fbList.unshift(id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
+    openChat(id);
+  } catch (e) { toast('查询失败：' + e.message); }
+};
+
+// 会话页
+
+// —— 补丁 v1.5.0-fix4：令牌兜底（复原失败时不得回显内部令牌）——
+function desensitize(s){
+  if (!s) return s;
+  let out = s;
+  // 带数字前缀的金额令牌：39.AMOUNT_001 / 15600.00 AMOUNT_002
+  out = out.replace(/[\d.,]*\s*AMOUNT_\d{3}/g, '该笔金额');
+  out = out.replace(/[\d.,]*\s*CARD_\d{3}/g, '卡号尾号****');
+  out = out.replace(/NAME_\d{3}/g, '客户');
+  out = out.replace(/PHONE_\d{3}/g, '预留手机号');
+  out = out.replace(/ID_\d{3}/g, '证件信息');
+  out = out.replace(/MERCHANT_\d{3}/g, '该商户');
+  out = out.replace(/[A-Z]{2,}_\d{3}/g, '相关信息');
+  out = out.replace(/您好，客户[，,。]/g, '您好，');
+  out = out.replace(/尊敬的\s*客户[，,]\s*您好[！!]?/g, '您好！');
+  out = out.replace(/\s{2,}/g, ' ').replace(/\s+([，。！？、])/g, '$1');
+  out = out.replace(/([！？。，])\1+/g, '$1').replace(/[！？]\s*。/g, '。');
+  return out;
+}
+function msgHtml(replies) {
+  return replies.map(m => {
+    if (m.sender === 'system')
+      return `<div class="sys">${desensitize(m.body)}<br>${(m.created_at || '').replace('T',' ').slice(5,16)}</div>`;
+    const out = m.sender === 'customer';
+    const who = m.sender === 'ai' ? '智能客服' : (out ? '我' : '客服');
+    return `<div class="m ${out ? 'out' : 'in'}">
+      <div class="who">${who} · ${(m.created_at || '').replace('T',' ').slice(5,16)}</div>
+      <div class="bub">${desensitize(m.body)}</div></div>`;
+  }).join('');
+}
+async function openChat(fb) {
+  curFb = fb; rated = false;
+  show('chat');
+  await refreshChat();
+  clearInterval(timer);
+  timer = setInterval(refreshChat, 5000);
+}
+async function refreshChat() {
+  if (!curFb) return;
+  try {
+    const d = await api('/feedback/api/v1/tickets/' + curFb + '?openid=' + encodeURIComponent(openid));
+    curTicket = d;
+    const closed = d.status === 'CLOSED_AI' || d.status === 'CLOSED_HUMAN';
+    $('#msgs').innerHTML = `<div class="sys">${curFb} · ${CAT[d.category] || d.category} · ${chip(d.status)}</div>` +
+      (msgHtml(d.replies || []) || '<div class="sys">暂无消息</div>');
+    const box = $('#msgs'); box.scrollTop = box.scrollHeight;
+    $('#ibar').hidden = closed;
+    $('#rate').hidden = !(rated === false && (d.status === 'AI_ANSWERING' || closed));
+    document.querySelectorAll('#rate button').forEach(b => b.disabled = false);
+  } catch (e) {
+    $('#msgs').innerHTML = `<div class="sys">加载失败：${e.message}</div>`;
+  }
+}
+$('#send').onclick = async () => {
+  const box = $('#reply'), body = box.value.trim();
+  if (!body || !curFb) return;
+  box.value = '';
+  try { await api('/feedback/api/v1/tickets/' + curFb + '/messages', 'POST', {openid, body}); }
+  catch (e) { toast('发送失败：' + e.message); box.value = body; return; }
+  await refreshChat();
+};
+$('#reply').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#send').click(); }
+});
+document.querySelectorAll('#rate button').forEach(b => b.onclick = async () => {
+  if (rated) return;
+  try {
+    await api('/feedback/api/v1/tickets/' + curFb + '/messages', 'POST',
+      {openid, kind: 'eval', body: b.dataset.v});
+    rated = true; $('#rate').hidden = true;
+    toast('感谢您的评价');
+    await refreshChat();
+  } catch (e) { toast('评价失败：' + e.message); }
+});
+</script>
+</body>
+</html>
