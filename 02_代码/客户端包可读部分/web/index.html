@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>客服工作台 · 内网可信域</title>
+<link rel="stylesheet" href="/assets/app.css?v=1.5.0">
+</head>
+<body class="app-agent">
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">光</div>
+    <h1><span class="t-full">银行客服 AI 工作台</span><span class="t-short">客服工作台</span></h1>
+    <span>坐席端 · 内网可信域</span>
+  </div>
+  <div class="zones">
+    <div class="zone"><span class="dot wait" id="d-inner"></span>内网</div>
+    <div class="zone"><span class="dot wait" id="d-dmz"></span>DMZ</div>
+    <div class="zone"><span class="dot wait" id="d-outer"></span>外网</div>
+    <div class="who" style="margin-left:8px;padding-left:16px;border-left:1px solid rgba(255,255,255,.22)">
+      <span class="nm" id="me-name">—</span>
+      <span class="role r-agent" id="me-role">坐席</span>
+      <button class="linkbtn" id="logout">退出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 左侧导航（导师意见：客户反馈/通知/通讯录/档案/个人中心/合成案例库收进侧栏，请假入个人中心；用户要求平铺不再分工作区/办公区） -->
+<div class="shell">
+  <nav class="sidenav" id="nav">
+    <button id="nav-home" class="on">🧪 合成案例库</button>
+    <button id="nav-feedback">📨 客户反馈<span class="nbadge" id="fbbadge" hidden></span></button>
+    <button id="nav-notices">📢 通知<span class="nbadge" id="nbadge" hidden></span></button>
+    <button id="nav-dm">📖 通讯录<span class="nbadge" id="dmbadge" hidden></span></button>
+    <button id="nav-archive">🗂 我的档案</button>
+    <button id="nav-me">👤 个人中心</button>
+  </nav>
+
+  <main style="min-width:0">
+<div id="page-home">
+  <div class="split">
+    <div class="card">
+      <div class="card-h"><h2>合成案例库</h2><span class="muted" id="case-count">—</span></div>
+      <div class="case-list" id="case-list"></div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:18px">
+        <div class="card-h"><h2>咨询录入</h2><span class="muted" id="sel-intent">未选择案例</span></div>
+        <div class="card-b">
+          <div class="field">
+            <label>客户陈述（系统已从内网业务库按最小权限读取）</label>
+            <div class="narr" id="narr">请从左侧选择一个合成案例。</div>
+          </div>
+          <div class="field">
+            <label>补充说明（可选，将参与脱敏）</label>
+            <input id="note" placeholder="例如：客户要求回访">
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="run" disabled>提交并处理</button>
+            <button class="btn ghost" id="reset">清空</button>
+          </div>
+          <div class="hint">提交后：内网取数 → 确定性脱敏 → 出域扫描 → 智能体规划 → 模型调用（内网/外网端点）→ 规则裁决 → 复原。工单归属固定为当前登录坐席。</div>
+        </div>
+      </div>
+
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <div class="sec-title">我的最近工单</div>
+  <div class="card">
+    <div class="card-b" style="padding:0" id="my-tickets"><div class="empty">暂无工单</div></div>
+  </div>
+</div><!-- /page-home -->
+
+<!-- 其余导航项均为独立页面（用户要求：不用弹窗，与合成案例库同级切换） -->
+<div id="page-notices" hidden></div>
+<div id="page-dm" hidden></div>
+<div id="page-feedback" hidden></div>
+<div id="page-archive" hidden></div>
+<div id="page-me" hidden></div>
+</main>
+</div><!-- /shell -->
+
+<!-- OA 通用弹窗 -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-mask" id="modal-mask"></div>
+  <div class="modal-card">
+    <div class="modal-h"><h3 id="modal-title">—</h3><button class="mini" id="modal-x">关闭</button></div>
+    <div class="modal-b" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const PORT_DMZ = 8102, PORT_OUTER = 8103;
+const HOST = location.hostname || '127.0.0.1';
+const DMZ = `http://${HOST}:${PORT_DMZ}`;
+const OUTER = `http://${HOST}:${PORT_OUTER}`;
+const API = '';
+
+let me = null, cases = [], sel = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---------- 会话 ---------- */
+async function boot() {
+  const r = await fetch(`${API}/internal/api/v1/auth/me`, {credentials: 'same-origin'});
+  if (!r.ok) { location.href = '/login?reason=expire'; return; }
+  me = await r.json();
+  if (me.must_change_pwd) { location.href = '/change-password'; return; }
+  // 工号单独包一层：手机上窄顶栏只留姓名（.who .nm .emp 在移动端隐藏）
+  $('#me-name').innerHTML = `${esc(me.name)}<span class="emp">（${esc(me.emp_id)}）</span>`;
+  $('#me-role').textContent = {agent:'客服坐席', supervisor:'客服主管', auditor:'审计员', developer:'科技开发'}[me.role] || me.role;
+  loadCases();
+  loadMyTickets();
+  refreshBadge();
+  setInterval(refreshBadge, 30000);
+  loadFbBadge();
+  setInterval(loadFbBadge, 5000);
+}
+
+$('#logout').onclick = async () => {
+  await fetch(`${API}/internal/api/v1/auth/logout`, {method: 'POST', credentials: 'same-origin'});
+  location.href = '/login?reason=expire';
+};
+
+/* ---------- health ---------- */
+async function ping(url, el) {
+  try {
+    const r = await fetch(url, {signal: AbortSignal.timeout(2500)});
+    document.getElementById(el).className = 'dot ' + (r.ok ? 'ok' : 'bad');
+  } catch (e) {
+    document.getElementById(el).className = 'dot bad';
+  }
+}
+function healthCheck() {
+  ping(`${API}/internal/api/v1/health`, 'd-inner');
+  ping(`${DMZ}/dmz/api/v1/health`, 'd-dmz');
+  ping(`${OUTER}/outer/api/v1/health`, 'd-outer');
+}
+
+/* ---------- cases ---------- */
+async function loadCases() {
+  const r = await fetch(`${API}/internal/api/v1/cases`, {credentials: 'same-origin'});
+  if (r.status === 401) { location.href = '/login?reason=expire'; return; }
+  cases = await r.json();
+  $('#case-count').textContent = cases.length + ' 例';
+  const cat = c => c.category.charAt(0);
+  $('#case-list').innerHTML = cases.map(c => `
+    <button class="case" data-id="${c.case_id}">
+      <div class="row1">
+        <span class="cid">${c.case_id}</span>
+        <span class="tag t-${cat(c)}">${esc(c.category)}</span>
+      </div>
+      <div class="txt">${esc(c.narrative)}</div>
+    </button>`).join('');
+  document.querySelectorAll('.case').forEach(b => b.onclick = () => pick(b.dataset.id));
+}
+
+function pick(id) {
+  sel = cases.find(c => c.case_id === id);
+  document.querySelectorAll('.case').forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  $('#narr').textContent = sel.narrative;
+  $('#sel-intent').textContent = sel.intent;
+  $('#run').disabled = false;
+  $('#result').innerHTML = '';
+  if (sel.fault) {
+    $('#result').innerHTML = `<div class="warnbox"><b>该案例用于故障演练：</b>可直接提交，系统会走正常路径；若需演练超时/非法响应，请运行 <code>pytest</code> 中的 T07/T08。</div>`;
+  }
+}
+
+/* ---------- run ---------- */
+$('#run').onclick = async () => {
+  if (!sel) return;
+  const btn = $('#run');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>处理中…';
+  $('#result').innerHTML = '';
+  try {
+    const body = {case_id: sel.case_id, emp_id: me.emp_id, note: $('#note').value || null};
+    const r = await fetch(`${API}/internal/api/v1/cases`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin', body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '请求失败');
+    render(data);
+    loadMyTickets();
+  } catch (e) {
+    $('#result').innerHTML = `<div class="verdict block"><div class="vicon">!</div><div><div class="vtitle">处理失败</div><div class="vsub">${esc(e.message)}</div></div></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交并处理';
+  }
+};
+
+$('#reset').onclick = () => {
+  sel = null;
+  document.querySelectorAll('.case').forEach(b => b.classList.remove('on'));
+  $('#narr').textContent = '请从左侧选择一个合成案例。';
+  $('#sel-intent').textContent = '未选择案例';
+  $('#run').disabled = true;
+  $('#result').innerHTML = '';
+  $('#note').value = '';
+};
+
+/* ---------- render ---------- */
+function verdictBox(d) {
+  const decision = d.decision || 'HUMAN_HANDOFF';
+  const status = d.status || '';
+  if (status === 'BLOCKED') return ['block', '出域被阻断', '安全拦截：原始敏感形态未通过扫描，请求未离开内网。'];
+  if (status === 'REJECTED') return ['human', '响应被拒收', '上游返回未通过 Schema / 字段 / 版本校验，已丢弃并转人工。'];
+  if (status === 'TIMEOUT') return ['human', '上游超时，已安全降级', '跨域链路不可用，按 fail-closed 转人工，未绕过网关直连。'];
+  if (decision === 'SHOW_SUGGESTION') return ['show', '可展示建议', '规则引擎判定为低风险，建议已通过校验并完成字段复原。'];
+  return ['human', '必须转人工', '规则引擎否决自动回复，模型输出仅作参考。'];
+}
+
+function fmtReasons(codes) {
+  if (!codes || !codes.length) return '';
+  return `<div class="chips">${codes.map(c => `<span class="chip warn">${esc(c)}</span>`).join('')}</div>`;
+}
+
+function render(d) {
+  const [cls, title, sub] = verdictBox(d);
+  const snapshot = d.outbound_snapshot;
+  let pretty = '';
+  if (snapshot) {
+    if (typeof snapshot === 'string') {
+      try { pretty = JSON.stringify(JSON.parse(snapshot), null, 2); } catch (e) { pretty = snapshot; }
+    } else {
+      pretty = JSON.stringify(snapshot, null, 2);
+    }
+  }
+
+  const agent = d.agent_output || {};
+  let restored = d.restored_text;
+  if (!restored) {
+    if (agent.intent_summary) {
+      restored = '【建议摘要】' + agent.intent_summary +
+        '\n【建议动作】' + agent.recommended_next_step +
+        '\n\n本次未执行字段复原。复原服务仅在规则裁决通过、且' +
+        '「请求编号 ≡ 会话 ≡ 操作者」三元匹配成立时开放——' +
+        '该请求已按规则转人工，不进入自动复原。';
+    } else {
+      restored = '本次未产生复原结果。';
+    }
+  }
+
+  $('#result').innerHTML = `
+    <div class="verdict ${cls}">
+      <div class="vicon">${cls === 'show' ? '✓' : cls === 'human' ? '↗' : '!'}</div>
+      <div style="flex:1">
+        <div class="vtitle">${title}</div>
+        <div class="vsub">${sub}</div>
+        ${fmtReasons(d.reason_codes)}
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="side">
+        <div class="side-h"><span>穿越边界的那份报文</span><span class="badge b-out">出域 · 令牌化</span></div>
+        <pre class="json">${esc(pretty || '（本次未发起出域调用）').replace(/\b((?:NAME|CARD|PHONE|ID|AMT|DATE|MERCHANT)_\d{3,})\b/g, '<span class="tok">$1</span>')}</pre>
+      </div>
+      <div class="side">
+        <div class="side-h"><span>${d.restored_text ? '内网复原后的展示' : '内网视图（未复原）'}</span><span class="badge ${d.restored_text ? 'b-in' : 'b-out'}">${d.restored_text ? '内网 · 已复原' : '内网 · 仅令牌'}</span></div>
+        <div class="restored">${esc(restored).replace(/\b((?:NAME|CARD|PHONE|ID|AMT|DATE|MERCHANT)_\d{3,})\b/g, '<span class="tok">$1</span>')}</div>
+      </div>
+    </div>
+
+    ${agent.intent_summary ? `
+    <div class="meta-grid">
+      <div class="meta-cell"><div class="k">请求编号</div><div class="v">${esc(d.request_id)}</div></div>
+      <div class="meta-cell"><div class="k">处理状态</div><div class="v">${esc(d.status)}</div></div>
+      <div class="meta-cell"><div class="k">智能体版本</div><div class="v">${esc(d.agent_version || '—')}</div></div>
+      <div class="meta-cell"><div class="k">模型端点</div><div class="v">${esc((d.model_supplier || '—') + ' / ' + (d.model_version || ''))}</div></div>
+      <div class="meta-cell"><div class="k">建议动作</div><div class="v">${esc(agent.recommended_next_step || '—')}</div></div>
+      <div class="meta-cell"><div class="k">规则引用</div><div class="v">${esc((agent.source_rule_ids || []).join(', ') || '—')}</div></div>
+    </div>` : ''}
+
+    ${agent.intent_summary && d.decision === 'SHOW_SUGGESTION' ? `
+    <div class="card" style="margin-top:16px">
+      <div class="card-h"><h2>人工确认</h2><span class="muted">系统记录确认结果，形成可追溯审计</span></div>
+      <div class="card-b">
+        <div class="btn-row">
+          <button class="btn primary sm" data-act="ACCEPT">采纳建议</button>
+          <button class="btn ghost sm" data-act="MODIFY">修改后采纳</button>
+          <button class="btn ghost sm" data-act="HUMAN_HANDOFF">转人工</button>
+          <button class="btn ghost sm" data-act="REJECT">驳回</button>
+        </div>
+        <div class="hint" id="confirm-msg"></div>
+      </div>
+    </div>` : ''}
+  `;
+
+  document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => confirmAct(d.request_id, b.dataset.act));
+}
+
+async function confirmAct(rid, action) {
+  const r = await fetch(`${API}/internal/api/v1/confirm`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin',
+    body: JSON.stringify({request_id: rid, emp_id: me.emp_id, action})
+  });
+  const d = await r.json();
+  if (r.ok) { $('#confirm-msg').textContent = `已记录：${action} → 工单状态 ${d.status}`; loadMyTickets(); }
+  else { $('#confirm-msg').textContent = d.detail || '操作失败'; }
+}
+
+/* ---------- 我的工单 ---------- */
+async function loadMyTickets() {
+  const r = await fetch(`${API}/internal/api/v1/tickets?limit=20`, {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const rows = await r.json();
+  if (!rows.length) { $('#my-tickets').innerHTML = '<div class="empty">暂无工单</div>'; return; }
+  $('#my-tickets').innerHTML = `<table>
+    <tr><th style="width:190px">请求编号</th><th style="width:120px">案例</th><th style="width:130px">状态</th><th style="width:150px">决策</th><th style="width:150px">时间</th><th>原因码</th></tr>
+    ${rows.map(t => `<tr>
+      <td class="mono">${esc(t.request_id)}</td>
+      <td class="mono">${esc(t.case_id)}</td>
+      <td>${esc(t.status)}</td>
+      <td>${esc(t.decision || '—')}</td>
+      <td class="mono" style="font-size:11px">${esc((t.created_at || '').replace('T', ' '))}</td>
+      <td class="mono" style="font-size:11px">${esc(t.reason_codes || '—')}</td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+/* ---------- OA：通知 / 请假 / 个人中心 ---------- */
+let dmTimer = null;
+let dmPeer = null;
+
+function openModal(title, html, opts = {}) {
+  $('#modal-title').textContent = title;
+  $('#modal-body').innerHTML = html;
+  $('#modal').hidden = false;
+  document.querySelector('#modal .modal-card').classList.toggle('wide', !!opts.wide);
+}
+function closeModal() {
+  $('#modal').hidden = true;
+  document.querySelector('#modal .modal-card').classList.remove('wide');
+}
+$('#modal-x').onclick = closeModal;
+$('#modal-mask').onclick = closeModal;
+
+/* 页面化：把原弹窗内容渲染到与合成案例库同级的独立页面（用户要求不用弹窗）。
+   fill=true 的页面（私信/工单处理）内部布局需要占满给定高度。 */
+function showPage(pid, title, html, opts = {}) {
+  $('#' + pid).innerHTML = `
+    <div class="card page-card">
+      <div class="card-h"><h2>${title}</h2>${opts.sub ? `<span class="muted">${opts.sub}</span>` : ''}</div>
+      <div class="page-body${opts.fill ? ' fill' : ''}">${html}</div>
+    </div>`;
+}
+
+/**
+ * 手机端「列表 → 会话」两级切换（微信式）。
+ * 宽屏下两个 class 都不改变布局：CSS 只在 max-width:760px 里才隐藏另一栏。
+ */
+function paneSwitch(wrapId, mode) {
+  const w = $('#' + wrapId);
+  if (!w) return;
+  w.classList.toggle('is-chat', mode === 'chat');
+  w.classList.toggle('is-list', mode === 'list');
+}
+function fbBack() {
+  fbPeer = null;
+  paneSwitch('fb-body', 'list');
+  const chat = $('#fb-chat');
+  if (chat) chat.innerHTML = '<div class="dm-empty">从左侧选择反馈工单</div>';
+  document.querySelectorAll('#fb-list .fb-item').forEach(x => x.classList.remove('on'));
+}
+function dmBack() {
+  dmPeer = null;
+  paneSwitch('dm-wrap', 'list');
+  const chat = $('#dm-chat');
+  if (chat) chat.innerHTML = '<div class="dm-empty">从左侧选择同事开始私信</div>';
+  document.querySelectorAll('#dm-list .dm-item').forEach(x => x.classList.remove('on'));
+}
+
+/* ---------- 左侧导航 ---------- */
+const NAV_PAGES = {
+  'nav-home': 'page-home', 'nav-notices': 'page-notices', 'nav-dm': 'page-dm',
+  'nav-feedback': 'page-feedback', 'nav-archive': 'page-archive', 'nav-me': 'page-me',
+};
+function navOn(id) {
+  document.querySelectorAll('.sidenav button').forEach(b => b.classList.toggle('on', b.id === id));
+  Object.entries(NAV_PAGES).forEach(([nav, pid]) => { const p = $('#' + pid); if (p) p.hidden = nav !== id; });
+  // 离开轮询页面时停掉对应定时器，避免后台空转
+  if (id !== 'nav-dm' && dmTimer) { clearInterval(dmTimer); dmTimer = null; dmPeer = null; }
+  if (id !== 'nav-feedback' && fbTimer) { clearInterval(fbTimer); fbTimer = null; fbPeer = null; }
+  // 切页回到顶部：手机上滚到列表底部再点导航，新页面不该停在半截
+  window.scrollTo({top: 0, behavior: 'instant'})
+}
+$('#nav-home').onclick = () => navOn('nav-home');
+$('#nav-notices').onclick = () => { navOn('nav-notices'); showNotices(); };
+$('#nav-dm').onclick = () => { navOn('nav-dm'); dmOpen(); };
+$('#nav-feedback').onclick = () => { navOn('nav-feedback'); fbOpen(); };
+$('#nav-archive').onclick = () => { navOn('nav-archive'); showArchive(); };
+$('#nav-me').onclick = () => { navOn('nav-me'); showMe(); };
+
+const LEVEL_CN = {normal: '常规', important: '重要', urgent: '紧急'};
+const LEAVE_ST = {PENDING: ['st-lock', '待审批'], APPROVED: ['st-on', '已通过'], REJECTED: ['st-off', '已驳回']};
+
+async function refreshBadge() {
+  try {
+    const [rn, rd] = await Promise.all([
+      fetch(`${API}/internal/api/v1/notices`, {credentials: 'same-origin'}),
+      fetch(`${API}/internal/api/v1/dms/unread`, {credentials: 'same-origin'}),
+    ]);
+    if (rn.ok) {
+      const d = await rn.json();
+      const b = $('#nbadge');
+      b.hidden = !d.unread;
+      b.textContent = d.unread > 99 ? '99+' : d.unread;
+    }
+    if (rd.ok) {
+      const d = await rd.json();
+      const b = $('#dmbadge');
+      b.hidden = !d.unread;
+      b.textContent = d.unread > 99 ? '99+' : d.unread;
+    }
+  } catch (e) {}
+}
+
+async function showNotices() {
+  const r = await fetch(`${API}/internal/api/v1/notices`, {credentials: 'same-origin'});
+  if (r.status === 401) { location.href = '/login?reason=expire'; return; }
+  const d = await r.json();
+  const items = d.items || [];
+  const html = items.length ? items.map(n => `
+    <div class="notice ${n.read_at ? 'read' : 'unread'}" data-nid="${esc(n.notice_id)}">
+      <div class="nrow1">
+        <span class="lvtag lv-${esc(n.level)}">${LEVEL_CN[n.level] || '常规'}</span>
+        <b>${esc(n.title)}</b>
+        ${n.read_at ? '' : '<span class="ndot">未读</span>'}
+      </div>
+      <div class="nbody">${esc(n.body)}</div>
+      <div class="nmeta">${esc(n.sender_name || '系统')} 发布于 ${esc((n.created_at || '').replace('T', ' '))}</div>
+    </div>`).join('') : '<div class="empty">暂无通知</div>';
+  showPage('page-notices', '通知公告', html + `<div class="hint">未读通知点击即可标记已读；管理员撤回的通知不再出现在列表中。</div>`);
+  document.querySelectorAll('.notice.unread').forEach(el => {
+    el.onclick = async () => {
+      const r2 = await fetch(`${API}/internal/api/v1/notices/${el.dataset.nid}/read`, {method: 'POST', credentials: 'same-origin'});
+      if (r2.ok) { el.classList.replace('unread', 'read'); el.querySelector('.ndot')?.remove(); refreshBadge(); }
+    };
+  });
+}
+  $('#btn-notices') && ($('#btn-notices').onclick = showNotices);  // 兼容旧入口（已移至侧栏）
+
+function showLeave() {
+  openModal('请假申请', `
+    <form id="lv-form" autocomplete="off">
+      <div class="field"><label>开始日期</label><input id="lv-s" type="date" required></div>
+      <div class="field"><label>结束日期</label><input id="lv-e" type="date" required></div>
+      <div class="field"><label>请假事由（2-500 字）</label>
+        <textarea id="lv-r" style="min-height:60px" maxlength="500" placeholder="例如：家中有事，需请假两天" required></textarea></div>
+      <div class="btn-row"><button class="btn primary sm" type="submit">提交申请</button>
+      <span class="hint" id="lv-msg">提交后进入管理员待审批队列。</span></div>
+    </form>
+    <div class="sec-title">我的请假记录</div>
+    <div id="lv-list" class="empty">加载中…</div>`);
+  $('#lv-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const msg = $('#lv-msg');
+    try {
+      const r = await fetch(`${API}/internal/api/v1/leaves`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin',
+        body: JSON.stringify({start_date: $('#lv-s').value, end_date: $('#lv-e').value, reason: $('#lv-r').value.trim()}),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || '提交失败');
+      msg.textContent = `已提交（单号 ${d.leave_id}），等待管理员审批`;
+      msg.style.color = '#0f6e56';
+      loadMyLeaves();
+    } catch (ex) { msg.textContent = ex.message; msg.style.color = '#a32d2d'; }
+  };
+  loadMyLeaves();
+}
+  $('#btn-leave') && ($('#btn-leave').onclick = showLeave);  // 兼容旧入口（已移入个人中心）
+
+async function loadMyLeaves() {
+  const r = await fetch(`${API}/internal/api/v1/leaves/mine`, {credentials: 'same-origin'});
+  const rows = r.ok ? await r.json() : [];
+  const box = $('#lv-list');
+  if (!box) return;
+  box.className = '';
+  box.innerHTML = rows.length ? `<table>
+    <tr><th style="width:100px">单号</th><th style="width:180px">起止</th><th>事由</th>
+    <th style="width:80px">状态</th><th style="width:110px">审批人</th><th style="width:150px">审批意见</th></tr>
+    ${rows.map(l => { const [cls, cn] = LEAVE_ST[l.status] || ['', l.status]; return `
+    <tr><td class="mono">${esc(l.leave_id)}</td>
+    <td class="mono" style="font-size:11px">${esc(l.start_date)} ~ ${esc(l.end_date)}</td>
+    <td style="font-size:12px">${esc(l.reason)}</td>
+    <td><span class="state ${cls}">${cn}</span></td>
+    <td>${esc(l.reviewer_name || '—')}</td>
+    <td style="font-size:12px">${esc(l.review_comment || '—')}</td></tr>`; }).join('')}
+  </table>` : '<div class="empty">暂无请假记录</div>';
+}
+
+async function showMe() {
+  const r = await fetch(`${API}/internal/api/v1/profile`, {credentials: 'same-origin'});
+  if (!r.ok) return;
+  const p = await r.json();
+  const ROLE_CN = {agent:'客服坐席', supervisor:'客服主管', auditor:'审计员', developer:'科技开发'};
+  showPage('page-me', '个人中心', `
+    <div class="meta-grid">
+      <div class="meta-cell"><div class="k">姓名</div><div class="v">${esc(p.name)}</div></div>
+      <div class="meta-cell"><div class="k">工号</div><div class="v">${esc(p.emp_id)}</div></div>
+      <div class="meta-cell"><div class="k">登录账号</div><div class="v">${esc(p.username || '—')}</div></div>
+      <div class="meta-cell"><div class="k">角色</div><div class="v">${ROLE_CN[p.role] || esc(p.role)}</div></div>
+      <div class="meta-cell"><div class="k">最近登录</div><div class="v">${esc((p.last_login || '—').replace('T', ' '))}</div></div>
+      <div class="meta-cell"><div class="k">未读通知</div><div class="v">${p.unread_notices}</div></div>
+      <div class="meta-cell"><div class="k">请假记录</div><div class="v">${p.leave_count} 次</div></div>
+      <div class="meta-cell"><div class="k">账号状态</div><div class="v">${p.active ? '正常' : '已停用'}</div></div>
+    </div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn primary sm" id="go-pwd">修改口令</button>
+      <button class="btn ghost sm" id="go-leave">请假申请</button>
+    </div>`);
+  $('#go-pwd').onclick = () => { location.href = '/change-password'; };
+  $('#go-leave').onclick = showLeave;   // 请假入口在个人中心（导师意见）
+}
+$('#btn-me') && ($('#btn-me').onclick = showMe);
+
+/* ---------- OA：通讯录与站内私信 ---------- */
+const ROLE_CN2 = {agent: '客服坐席', supervisor: '客服主管', auditor: '审计员', developer: '科技开发'};
+
+function dmOpen() {
+  showPage('page-dm', '通讯录 · 站内私信', `
+    <div class="dm-wrap is-list" id="dm-wrap">
+      <div class="dm-list" id="dm-list"><div class="empty">加载中…</div></div>
+      <div class="dm-chat" id="dm-chat">
+        <div class="dm-empty">从左侧选择同事开始私信</div>
+      </div>
+    </div>`, {fill: true});
+  loadDmContacts();
+  dmTimer = setInterval(() => { refreshBadge(); if (dmPeer) loadDmThread(dmPeer, true); }, 5000);
+}
+  $('#btn-dm') && ($('#btn-dm').onclick = dmOpen);  // 兼容旧入口（已移至侧栏）
+
+async function loadDmContacts() {
+  const r = await fetch(`${API}/internal/api/v1/dms/contacts`, {credentials: 'same-origin'});
+  if (r.status === 401) { location.href = '/login?reason=expire'; return; }
+  const d = await r.json();
+  const items = d.items || [];
+  $('#dm-list').innerHTML = items.length ? items.map(p => `
+    <div class="dm-item" data-emp="${esc(p.emp_id)}">
+      <div class="di-row1"><b>${esc(p.name)}</b>
+        ${p.unread ? `<span class="nbadge">${p.unread > 99 ? '99+' : p.unread}</span>` : ''}</div>
+      <div class="di-row2">${ROLE_CN2[p.role] || esc(p.role)} · ${esc(p.emp_id)}</div>
+      ${p.last_body ? `<div class="di-last">${p.last_sender === d.me ? '我：' : ''}${esc(p.last_body.slice(0, 24))}</div>` : ''}
+    </div>`).join('') : '<div class="empty">暂无联系人</div>';
+  document.querySelectorAll('.dm-item').forEach(el => {
+    el.classList.toggle('on', el.dataset.emp === dmPeer);
+    el.onclick = () => {
+      document.querySelectorAll('.dm-item').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+      loadDmThread(el.dataset.emp);
+    };
+  });
+}
+
+function dmMsgHtml(msgs, meId) {
+  return msgs.length ? msgs.map(m => `
+    <div class="bubble ${m.sender_emp_id === meId ? 'out' : 'in'}">
+      ${esc(m.body)}<span class="t">${esc((m.created_at || '').replace('T', ' ').slice(5, 16))}${m.sender_emp_id === meId && m.read_at ? ' · 已读' : ''}</span>
+    </div>`).join('') : '<div class="dm-empty">还没有消息，发第一条私信吧</div>';
+}
+
+async function loadDmThread(empId, silent = false) {
+  const r = await fetch(`${API}/internal/api/v1/dms/with/${empId}`, {credentials: 'same-origin'});
+  if (r.status === 401) { location.href = '/login?reason=expire'; return; }
+  if (!r.ok) return;
+  const d = await r.json();
+  // 用户已切换会话时丢弃过期响应
+  if (dmPeer && dmPeer !== empId && silent) return;
+  const switching = dmPeer !== empId;
+  dmPeer = empId;
+  const msgs = d.items || [];
+  const meId = (d.me !== undefined ? d.me : (me && me.emp_id));
+
+  if (switching || !$('#dm-msgs')) {
+    // 全量重建：仅切换会话 / 首次打开时执行
+    $('#dm-chat').innerHTML = `
+      <div class="dm-head"><button class="dm-back" id="dm-back" type="button">← 列表</button><span class="dm-head-t">${esc(d.peer.name)}（${esc(d.peer.emp_id)}） · ${ROLE_CN2[d.peer.role] || esc(d.peer.role)}</span></div>
+      <div class="dm-msgs" id="dm-msgs">${dmMsgHtml(msgs, meId)}</div>
+      <div class="dm-input">
+        <textarea id="dm-text" maxlength="500" rows="2" placeholder="输入消息，Enter 发送，Shift+Enter 换行（500 字以内）"></textarea>
+        <button class="btn primary sm" id="dm-send">发送</button>
+      </div>`;
+    paneSwitch('dm-wrap', 'chat');
+    $('#dm-back') && ($('#dm-back').onclick = dmBack);
+    const box = $('#dm-msgs');
+    box.scrollTop = box.scrollHeight;
+    const send = async () => {
+      const text = $('#dm-text').value.trim();
+      if (!text) return;
+      const btn = $('#dm-send');
+      btn.disabled = true;
+      try {
+        const r2 = await fetch(`${API}/internal/api/v1/dms`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin',
+          body: JSON.stringify({to_emp_id: empId, body: text}),
+        });
+        const dd = await r2.json().catch(() => ({}));
+        if (!r2.ok) throw new Error(dd.detail || '发送失败');
+        $('#dm-text').value = '';
+        await loadDmThread(empId, true);
+        loadDmContacts();
+        refreshBadge();
+      } catch (ex) { alert(ex.message); }
+      btn.disabled = false;
+    };
+    $('#dm-send').onclick = send;
+    $('#dm-text').onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+    };
+  } else {
+    // 静默刷新：只更新消息列表，不重建输入框（保留正在输入的内容与焦点）
+    const box = $('#dm-msgs');
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.innerHTML = dmMsgHtml(msgs, meId);
+    if (nearBottom) box.scrollTop = box.scrollHeight;
+  }
+  // 打开会话即已读：立即清掉该联系人与顶栏的红点（不等下一次轮询）
+  loadDmContacts();
+  refreshBadge();
+}
+
+/* ---------- 第二期：客户反馈（M3） ---------- */
+const FB_CAT_CN = {ACCOUNT: '账户', LOAN: '贷款', CREDIT_CARD: '信用卡', OTHER: '其他'};
+const FB_ST_CN = {SUBMITTED: '已受理', AI_ANSWERING: 'AI 应答中', CLOSED_AI: 'AI 已回复',
+  PENDING_HUMAN: '待人工接管', HUMAN_ANSWERING: '人工处理中', CLOSED_HUMAN: '已办结'};
+let fbTimer = null, fbPeer = null, fbFilter = 'todo', fbItems = [];
+
+/* 状态分桶：未处理（还没人接）/ 处理中 / 已办结——一眼看出哪些没处理 */
+const FB_FILTERS = [['all', '全部'], ['todo', '未处理'], ['doing', '处理中'], ['done', '已办结']];
+function fbBucket(st) {
+  if (st === 'HUMAN_ANSWERING') return 'doing';
+  if ((st || '').startsWith('CLOSED')) return 'done';
+  return 'todo';  // SUBMITTED / AI_ANSWERING / PENDING_HUMAN
+}
+
+async function fbApi(path, opts = {}) {
+  const r = await fetch(`${API}${path}`, {credentials: 'same-origin', ...opts});
+  if (r.status === 401) { location.href = '/login?reason=expire'; throw new Error('未登录'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return d;
+}
+
+function fbChip(st) {
+  return `<span class="fb-chip fb-st-${esc(st)}">${FB_ST_CN[st] || esc(st)}</span>`;
+}
+
+async function loadFbBadge() {
+  try {
+    const d = await fbApi('/internal/api/v1/feedback/list');
+    const n = d.pending || 0;
+    const b = $('#fbbadge');
+    b.hidden = !n;
+    b.textContent = n > 99 ? '99+' : n;
+  } catch (e) {}
+}
+
+function fbRenderTabs() {
+  const counts = {all: fbItems.length, todo: 0, doing: 0, done: 0};
+  fbItems.forEach(t => counts[fbBucket(t.status)]++);
+  $('#fb-tabs').innerHTML = FB_FILTERS.map(([k, label]) =>
+    `<button data-k="${k}" class="${fbFilter === k ? 'on' : ''}">${label} ${counts[k]}</button>`).join('');
+  document.querySelectorAll('#fb-tabs button').forEach(b => b.onclick = () => {
+    fbFilter = b.dataset.k; fbRenderList();
+  });
+}
+
+function fbRenderList() {
+  fbRenderTabs();
+  const items = fbItems.filter(t => fbFilter === 'all' || fbBucket(t.status) === fbFilter);
+  $('#fb-list').innerHTML = items.length ? items.map(t => `
+    <div class="fb-item ${fbBucket(t.status) === 'todo' ? 'hot' : ''}" data-fb="${esc(t.fb_id)}">
+      <div class="fb-fi-row1"><b>${esc(t.fb_id)}</b><span class="fb-tags">${fbBucket(t.status) === 'todo' ? '<span class="fb-hot">未处理</span>' : ''}${fbChip(t.status)}</span></div>
+      <div class="fb-fi-row2">${FB_CAT_CN[t.category] || esc(t.category)} · ${esc((t.body_masked || '').slice(0, 34))}</div>
+    </div>`).join('') : '<div class="empty">该分类下暂无工单</div>';
+  document.querySelectorAll('#fb-list .fb-item').forEach(el => {
+    el.classList.toggle('on', el.dataset.fb === fbPeer);
+    el.onclick = () => loadFbThread(el.dataset.fb);
+  });
+}
+
+async function loadFbList() {
+  const d = await fbApi('/internal/api/v1/feedback/list');
+  fbItems = d.items || [];
+  fbRenderList();
+}
+
+function fbMsgHtml(replies) {
+  return replies.length ? replies.map(m => {
+    if (m.sender === 'system')
+      return `<div class="sys-note">${esc(m.body_masked || m.body || '')}<span class="t">${esc((m.created_at || '').replace('T', ' ').slice(5, 16))}</span></div>`;
+    const out = m.sender !== 'customer';
+    const who = m.sender === 'ai' ? 'AI' : (m.sender === 'customer' ? '客户' : '坐席');
+    return `<div class="bubble ${out ? 'out' : 'in'}">${esc(m.body_masked || m.body || '')}
+      <span class="t">${who} · ${esc((m.created_at || '').replace('T', ' ').slice(5, 16))}</span></div>`;
+  }).join('') : '<div class="dm-empty">暂无往来消息</div>';
+}
+
+function fbActionBar(t) {
+  if (t.status === 'PENDING_HUMAN' || t.status === 'AI_ANSWERING')
+    return `<div class="fb-actions" id="fb-bar"><button class="btn primary sm" id="fb-take">接管</button><button class="btn sm" id="fb-close">办结</button></div>`;
+  if (t.status === 'HUMAN_ANSWERING')
+    return `<div class="fb-actions" id="fb-bar"><button class="btn sm" id="fb-close">办结</button></div>`;
+  return `<div class="fb-actions" id="fb-bar"></div>`;
+}
+
+function fbWire(fbId, t) {
+  // 注意：静默轮询会对常驻的输入条反复调用 fbWire，绑定必须用 onclick 赋值
+  // （覆盖式），不能用 addEventListener（叠加式）——否则一次点击触发多次发送。
+  $('#fb-take') && ($('#fb-take').onclick = async () => {
+    try { await fbApi(`/internal/api/v1/feedback/${fbId}/takeover`, {method: 'POST'});
+      await loadFbThread(fbId); loadFbList(); loadFbBadge(); } catch (e) { alert(e.message); }
+  });
+  $('#fb-close') && ($('#fb-close').onclick = async () => {
+    try { await fbApi(`/internal/api/v1/feedback/${fbId}/close`, {method: 'POST'});
+      await loadFbThread(fbId); loadFbList(); loadFbBadge(); } catch (e) { alert(e.message); }
+  });
+  const send = async () => {
+    const box = $('#fb-text');
+    const text = (box?.value || '').trim();
+    if (!text) return;
+    const btn = $('#fb-send');
+    if (btn?.disabled) return;  // 防重入：上一条还在发送中
+    btn.disabled = true;
+    try {
+      await fbApi(`/internal/api/v1/feedback/${fbId}/reply`,
+                  {method: 'POST', headers: {'Content-Type': 'application/json'},
+                   body: JSON.stringify({body: text})});
+      box.value = '';
+      await loadFbThread(fbId, true);
+      loadFbList();
+    } catch (e) { alert(e.message); }
+    btn.disabled = false;
+  };
+  $('#fb-send') && ($('#fb-send').onclick = send);
+  $('#fb-text') && ($('#fb-text').onkeydown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+  });
+}
+
+async function loadFbThread(fbId, silent = false) {
+  const d = await fbApi(`/internal/api/v1/feedback/${fbId}`);
+  if (fbPeer && fbPeer !== fbId && silent) return;
+  const switching = fbPeer !== fbId;
+  fbPeer = fbId;
+  const t = d.ticket, replies = d.replies || [];
+
+  if (switching || !$('#fb-msgs')) {
+    $('#fb-chat').innerHTML = `
+      <div class="dm-head"><button class="dm-back" id="fb-back" type="button">← 列表</button><span class="dm-head-t">${esc(t.fb_id)} · ${FB_CAT_CN[t.category] || esc(t.category)} ${fbChip(t.status)}</span></div>
+      <div class="dm-msgs" id="fb-msgs">${fbMsgHtml(replies)}</div>
+      <div class="dm-input" id="fb-inputbar" ${['PENDING_HUMAN', 'HUMAN_ANSWERING', 'AI_ANSWERING'].includes(t.status) ? '' : 'hidden'}>
+        <textarea id="fb-text" maxlength="500" rows="2" placeholder="回复客户（回复即接管；内容经 DMZ 规则裁决后下发）"></textarea>
+        <button class="btn primary sm" id="fb-send">回复</button>
+      </div>
+      ${fbActionBar(t)}
+      <div class="fb-note">客户信息已脱敏；答复口径不得承诺业务结果（命中红线将被 DMZ 否决）。</div>`;
+    const box = $('#fb-msgs');
+    box.scrollTop = box.scrollHeight;
+    fbWire(fbId, t);
+    // 手机端：列表 → 会话两级切换（宽屏下两个 class 都不影响布局）
+    paneSwitch('fb-body', 'chat');
+    $('#fb-back') && ($('#fb-back').onclick = fbBack);
+  } else {
+    const box = $('#fb-msgs');
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.innerHTML = fbMsgHtml(replies);
+    if (nearBottom) box.scrollTop = box.scrollHeight;
+    const head = $('#fb-chat .dm-head-t');
+    if (head) head.innerHTML = `${esc(t.fb_id)} · ${FB_CAT_CN[t.category] || esc(t.category)} ${fbChip(t.status)}`;
+    const bar = $('#fb-bar');
+    if (bar) { bar.outerHTML = fbActionBar(t); fbWire(fbId, t); }
+    const inp = $('#fb-inputbar');
+    if (inp) inp.hidden = !['PENDING_HUMAN', 'HUMAN_ANSWERING', 'AI_ANSWERING'].includes(t.status);
+  }
+}
+
+function fbOpen() {
+  showPage('page-feedback', '客户反馈 · 工单处理', `
+    <div class="fb-layout">
+      <div class="fb-tabs" id="fb-tabs"></div>
+      <div class="fb-body is-list" id="fb-body">
+        <div class="dm-list" id="fb-list"><div class="empty">加载中…</div></div>
+        <div class="dm-chat" id="fb-chat"><div class="dm-empty">从左侧选择反馈工单</div></div>
+      </div>
+    </div>`, {fill: true, sub: '未处理工单会置顶标红'});
+  loadFbList();
+  loadFbBadge();
+  fbTimer = setInterval(() => { loadFbBadge(); if (fbPeer) loadFbThread(fbPeer, true); }, 5000);
+}
+  $('#btn-feedback') && ($('#btn-feedback').onclick = fbOpen);  // 兼容旧入口（已移至侧栏）
+
+/* ---------- 我的档案（坐席个人工作历史） ---------- */
+function fbTime(s) { return esc((s || '').replace('T', ' ').slice(0, 16)); }
+
+async function loadMine() {
+  const d = await fbApi('/internal/api/v1/feedback/mine');
+  const items = d.items || [];
+  const total = items.length;
+  const closed = items.filter(t => (t.status || '').startsWith('CLOSED')).length;
+  $('#ar-stats').innerHTML = total
+    ? `<span class="ar-stat"><b>我</b>经手 ${total} 单 · 办结 ${closed} 单 · 处理中 ${total - closed} 单</span>`
+    : '<span class="muted">暂无经手记录</span>';
+  $('#ar-list').innerHTML = total ? `
+    <table><thead><tr>
+      <th>工单号</th><th>类型</th><th>状态</th><th>回复数</th><th>创建时间</th><th>最近动态</th>
+    </tr></thead><tbody>${items.map(t => `
+      <tr>
+        <td>${esc(t.fb_id)}</td>
+        <td>${FB_CAT_CN[t.category] || esc(t.category)}</td>
+        <td>${fbChip(t.status)}</td>
+        <td>${t.reply_count}</td>
+        <td>${fbTime(t.created_at)}</td>
+        <td>${fbTime(t.updated_at)}</td>
+      </tr>`).join('')}</tbody></table>`
+    : '<div class="empty">暂无经手工单——在「客户反馈」中接管或回复后，每一单都会记录在这里</div>';
+}
+
+function showArchive() {
+  showPage('page-archive', '我的档案 · 工作历史', `
+    <div class="ar-stats" id="ar-stats"><span class="muted">加载中…</span></div>
+    <div id="ar-list"><div class="empty">加载中…</div></div>`);
+  loadMine();
+}
+
+/* ---------- boot ---------- */
+boot();
+healthCheck();
+setInterval(healthCheck, 10000);
+loadFbBadge();
+setInterval(loadFbBadge, 5000);
+</script>
+
+<footer class="footbar">
+  <div class="fin">
+    <div class="fl"><b>微光工作室 · 银行客服 AI 工作台</b><br>PoC 演示环境 · 客户与数据均为虚构 · 请勿输入真实客户信息</div>
+    <div class="fr">内网可信域 / DMZ / 外网协同域 · © 2026</div>
+  </div>
+</footer>
+</body>
+</html>

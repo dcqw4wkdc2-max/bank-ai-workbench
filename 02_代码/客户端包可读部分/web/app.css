@@ -1,0 +1,451 @@
+:root{
+  /* —— 企业级配色（深藏青 × 鎏金点缀）—— */
+  --navy:#0e2f55; --navy-2:#173e6b; --navy-3:#0a2340;
+  --gold:#b8912f; --gold-2:#d3b25e;
+  --ink:#182230; --ink2:#455062; --ink3:#7c8698;
+  --line:#e3e7ee; --line2:#cbd2dd;
+  --bg:#f2f4f8; --panel:#fff; --panel2:#f6f8fb;
+  --teal:#0f6e56; --teal-bg:#e1f5ee; --teal-line:#9fe1cb;
+  --blue:#185fa5; --blue-bg:#e6f1fb; --blue-line:#b5d4f4;
+  --amber:#8a5209; --amber-bg:#faeeda; --amber-line:#fac775;
+  --red:#a32d2d; --red-bg:#fcebeb; --red-line:#f7c1c1;
+  --gray:#5f6a7d; --gray-bg:#eef1f5;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Courier New",monospace;
+  --shadow:0 1px 2px rgba(14,47,85,.05),0 2px 8px rgba(14,47,85,.06);
+  --shadow-lg:0 4px 18px rgba(14,47,85,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;font-size:13.5px}
+
+/* ---- 顶栏（官网式深藏青） ---- */
+.topbar{background:linear-gradient(120deg,var(--navy-3) 0%,var(--navy) 55%,var(--navy-2) 100%);color:#fff;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:62px;position:sticky;top:0;z-index:50;box-shadow:0 2px 10px rgba(10,35,64,.25)}
+.topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,var(--gold) 0%,var(--gold-2) 30%,transparent 75%)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(145deg,#1d4a85,#123563);border:1px solid rgba(211,178,94,.55);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:var(--gold-2);flex:none}
+.brand h1{font-size:16px;font-weight:600;letter-spacing:.02em;color:#fff}
+.brand span{font-size:12px;color:rgba(255,255,255,.62)}
+.zones{display:flex;gap:18px;align-items:center}
+.zone{display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.78)}
+.dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.28)}
+.dot.ok{background:#3fbd85;box-shadow:0 0 0 3px rgba(63,189,133,.18)}
+.dot.bad{background:#e05a52;box-shadow:0 0 0 3px rgba(224,90,82,.18)}
+.dot.wait{background:var(--gold-2)}
+
+/* ---- 页脚（官网式） ---- */
+.footbar{border-top:1px solid var(--line);background:var(--panel);margin-top:46px}
+.footbar .fin{max-width:1500px;margin:0 auto;padding:18px 28px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.footbar .fl{font-size:12px;color:var(--ink3);line-height:1.7}
+.footbar .fl b{color:var(--ink2);font-weight:600}
+.footbar .fr{font-size:11.5px;color:var(--ink3);font-family:var(--mono)}
+
+/* ---- tabs ---- */
+.tabs{background:var(--panel);border-bottom:1px solid var(--line);padding:0 28px;display:flex;gap:2px;position:sticky;top:62px;z-index:49;overflow-x:auto;box-shadow:0 1px 4px rgba(14,47,85,.04)}
+.tab{padding:12px 16px;font-size:13.5px;color:var(--ink3);border-bottom:2px solid transparent;white-space:nowrap}
+.tab:hover{color:var(--navy)}
+.tab.on{color:var(--navy);border-bottom-color:var(--gold);font-weight:600}
+
+/* 注意：main/admin-main 都是 .shell 这个 Grid 的子项。Grid 子项一旦写了 margin:auto，
+   justify-self:stretch 失效 → 宽度退化为内容宽度（shrink-to-fit），页面内容窄时会
+   缩成中间一条、两侧大量留白。因此这里必须 width:100% + 不写 auto margin，并放开
+   max-width 让宽屏真正铺满（用户要求：能铺满就不要留空）。 */
+main{padding:24px clamp(16px, 2.6vw, 44px) 48px;width:100%;min-width:0;max-width:none}
+.pane{display:none}
+.pane.on{display:block}
+
+/* ---- layout ---- */
+/* 桌面端填满可用宽度与视口高度，消除中部/右下大片留白（导师意见 1） */
+.split{display:grid;grid-template-columns:minmax(300px, 360px) minmax(0, 1fr);
+  gap:20px;align-items:stretch;min-height:calc(100vh - 180px)}
+.split>.card,
+.split>div{display:flex;flex-direction:column;min-width:0}
+.split>.card .case-list{flex:1;max-height:none;min-height:200px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:var(--shadow)}
+.card-h{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,#fff, #fbfcfe)}
+.card-h h2{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--navy);display:flex;align-items:center;gap:8px}
+.card-h h2::before{content:"";width:3px;height:13px;border-radius:2px;background:var(--gold);flex:none}
+.card-b{padding:16px}
+
+/* ---------- 页面化导航内容（用户要求：各功能独立页面，不用弹窗） ---------- */
+.page-card{width:100%;display:flex;flex-direction:column;min-height:calc(100vh - 180px)}
+.page-body{padding:16px;width:100%;flex:1;min-height:0}
+/* 满高页面（站内私信 / 客户反馈工单处理）：内部 dm-wrap / fb-layout 需要
+   明确高度才能 100% 撑开；预留顶栏+页头+页脚空间。
+   注意：page-body 自身是 flex 子项（flex:1；computed height:auto），子元素的
+   height:100% 无法解析——必须把 page-body 也改成 flex 容器，让子项用 flex 吃掉高度。 */
+.page-body.fill{height:calc(100vh - 180px);min-height:420px;padding:0;overflow:hidden;display:flex;flex-direction:column}
+.page-body.fill .dm-wrap,.page-body.fill .fb-layout{flex:1 1 auto;min-height:0;height:auto}
+@media (max-width:1080px){
+  .page-body.fill{height:auto;min-height:0;overflow:visible}
+}
+.muted{color:var(--ink3);font-size:12.5px}
+
+/* ---- case list ---- */
+.case-list{max-height:calc(100vh - 215px);overflow-y:auto}
+.case{padding:11px 16px;border-bottom:1px solid var(--line);cursor:pointer;display:block;width:100%;text-align:left;transition:background .12s}
+.case:hover{background:var(--panel2)}
+.case.on{background:linear-gradient(90deg,rgba(184,145,47,.10),rgba(184,145,47,.02));border-left:2px solid var(--gold);padding-left:14px}
+.case .row1{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.case .cid{font-family:var(--mono);font-size:12px;color:var(--ink2);font-weight:600}
+.case .txt{font-size:12.5px;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
+
+.tag{font-size:10.5px;padding:1px 6px;border-radius:8px;border:1px solid;font-weight:500;white-space:nowrap}
+.t-A{background:var(--teal-bg);color:var(--teal);border-color:var(--teal-line)}
+.t-B{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-line)}
+.t-C{background:var(--red-bg);color:var(--red);border-color:var(--red-line)}
+
+/* ---- form ---- */
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--ink3);margin-bottom:5px}
+.field textarea,.field select,.field input{width:100%;padding:8px 10px;border:1px solid var(--line2);border-radius:6px;background:var(--panel);color:var(--ink);outline:none}
+.field textarea:focus,.field select:focus,.field input:focus{border-color:var(--navy-2);box-shadow:0 0 0 3px rgba(23,62,107,.08)}
+.field textarea{resize:vertical;min-height:52px;line-height:1.5}
+.btn{padding:8px 16px;border-radius:6px;font-size:13.5px;font-weight:500;border:1px solid transparent;transition:all .12s}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:linear-gradient(135deg,var(--navy),var(--navy-2));color:#fff;box-shadow:0 1px 4px rgba(14,47,85,.25)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.12)}
+.btn.ghost{border-color:var(--line2);color:var(--ink2);background:var(--panel)}
+.btn.ghost:hover{border-color:var(--navy-2);color:var(--navy)}
+.btn.sm{padding:6px 12px;font-size:12.5px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---- narrative preview ---- */
+.narr{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--ink2);line-height:1.65;max-height:110px;overflow:auto;white-space:pre-wrap}
+
+/* ---- verdict banner ---- */
+.verdict{border-radius:8px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:flex-start;gap:12px;border:1px solid}
+.verdict.show{background:var(--teal-bg);border-color:var(--teal-line)}
+.verdict.human{background:var(--amber-bg);border-color:var(--amber-line)}
+.verdict.block{background:var(--red-bg);border-color:var(--red-line)}
+.verdict .vtitle{font-size:14.5px;font-weight:600;margin-bottom:3px}
+.verdict.show .vtitle{color:var(--teal)}
+.verdict.human .vtitle{color:var(--amber)}
+.verdict.block .vtitle{color:var(--red)}
+.verdict .vsub{font-size:12.5px;color:var(--ink2)}
+.vicon{width:22px;height:22px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;margin-top:1px}
+.show .vicon{background:var(--teal)}
+.human .vicon{background:var(--amber)}
+.block .vicon{background:var(--red)}
+
+/* ---- compare ---- */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;box-shadow:var(--shadow)}
+.side{padding:0;min-width:0}
+.side+.side{border-left:1px dashed var(--line2)}
+.side-h{padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--line);font-size:12px;font-weight:600;display:flex;justify-content:space-between;align-items:center;color:var(--ink2)}
+.side-h .badge{font-size:10.5px;padding:1px 6px;border-radius:8px;font-weight:500}
+.b-out{background:var(--blue-bg);color:var(--blue)}
+.b-in{background:var(--teal-bg);color:var(--teal)}
+pre.json{margin:0;padding:14px;font-family:var(--mono);font-size:11.5px;line-height:1.55;overflow:auto;max-height:340px;color:var(--ink2);background:var(--panel);white-space:pre;tab-size:2}
+.tok{background:#fdf3d7;color:#8a6a10;border-radius:2px;padding:0 1px;font-weight:600}
+.real{background:#d8f0e4;color:#0b4f3d;border-radius:2px;padding:0 1px;font-weight:600}
+.restored{padding:16px;font-size:13.5px;line-height:1.8;color:var(--ink);white-space:pre-wrap;max-height:340px;overflow:auto}
+
+/* ---- meta grid ---- */
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:16px}
+.meta-cell{background:var(--panel);padding:10px 14px}
+.meta-cell .k{font-size:11px;color:var(--ink3);margin-bottom:2px}
+.meta-cell .v{font-size:13px;font-family:var(--mono);color:var(--ink);word-break:break-all}
+
+/* ---- reason chips ---- */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font-size:11.5px;padding:2px 8px;border-radius:10px;background:var(--gray-bg);color:var(--gray);border:1px solid var(--line2);font-family:var(--mono)}
+.chip.warn{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-line)}
+.chip.bad{background:var(--red-bg);color:var(--red);border-color:var(--red-line)}
+
+/* ---- tables ---- */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;padding:8px 12px;background:linear-gradient(180deg,#f2f5f9,#e9edf4);border-bottom:1px solid var(--line2);font-weight:600;color:var(--navy);font-size:12px;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--line);color:var(--ink2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#f8fafd}
+td.mono{font-family:var(--mono);font-size:11.5px}
+.sev-critical{color:var(--red);font-weight:600}
+.sev-high{color:var(--amber);font-weight:500}
+
+/* ---- acceptance ---- */
+.acc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(258px,1fr));gap:10px}
+.acc{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;border-left-width:3px;box-shadow:var(--shadow)}
+.acc.pass{border-left-color:#2f9e6e}
+.acc.fail{border-left-color:#d0453f}
+.acc.skip{border-left-color:var(--line2)}
+.acc .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.acc .id{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--navy)}
+.acc .nm{font-size:12.5px;color:var(--ink2);line-height:1.45}
+.acc .ev{font-size:11px;color:var(--ink3);margin-top:5px;font-family:var(--mono);word-break:break-all}
+
+/* ---- mcp ---- */
+.mcp-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);gap:12px}
+.mcp-row:last-child{border-bottom:none}
+.mcp-row code{font-family:var(--mono);font-size:12px;color:var(--navy)}
+.mcp-row .why{font-size:11.5px;color:var(--ink3)}
+.mcp-out{margin-top:16px;background:#0d1b2e;border-radius:8px;padding:14px;font-family:var(--mono);font-size:11.5px;line-height:1.6;color:#c8d6ea;max-height:280px;overflow:auto;white-space:pre-wrap}
+
+.spinner{display:inline-block;width:11px;height:11px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.empty{padding:36px 20px;text-align:center;color:var(--ink3);font-size:13px}
+.hint{font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6}
+.warnbox{background:var(--amber-bg);border:1px solid var(--amber-line);border-left:3px solid var(--gold);border-radius:6px;padding:10px 12px;font-size:12.5px;color:var(--ink2);margin-bottom:14px;line-height:1.6}
+
+/* ================= 通用：登录用户区 ================= */
+.who{display:flex;align-items:center;gap:10px;font-size:12.5px;color:rgba(255,255,255,.82)}
+.who .nm{font-weight:600;color:#fff;font-size:13px}
+.who .role{font-size:10.5px;padding:1px 7px;border-radius:8px;border:1px solid;font-weight:500}
+.r-agent{background:rgba(122,168,224,.16);color:#a9c8ec;border-color:rgba(122,168,224,.45)}
+.r-supervisor{background:rgba(211,178,94,.16);color:var(--gold-2);border-color:rgba(211,178,94,.5)}
+.r-auditor{background:rgba(250,206,120,.14);color:#ecd39a;border-color:rgba(250,206,120,.4)}
+.r-developer{background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.28)}
+.linkbtn{font-size:12.5px;color:rgba(255,255,255,.6);text-decoration:underline;text-underline-offset:3px}
+.linkbtn:hover{color:#fff}
+
+/* ================= 管理端：侧栏布局 ================= */
+.shell{display:grid;grid-template-columns:200px minmax(0,1fr);align-items:start}
+.sidenav{background:var(--panel);border-right:1px solid var(--line);padding:14px 0;position:sticky;top:62px;height:calc(100vh - 62px);overflow-y:auto;box-shadow:1px 0 6px rgba(14,47,85,.03)}
+.sidenav .grp{font-size:10.5px;color:var(--ink3);padding:12px 20px 6px;letter-spacing:.08em}
+.sidenav button{display:block;width:100%;text-align:left;padding:9px 20px;font-size:13px;color:var(--ink2);border-left:2px solid transparent}
+.sidenav button:hover{background:var(--panel2);color:var(--navy)}
+.sidenav button.on{background:linear-gradient(90deg,rgba(184,145,47,.12),rgba(184,145,47,.02));color:var(--navy);border-left-color:var(--gold);font-weight:600}
+.admin-main{padding:24px clamp(16px, 2.6vw, 44px) 56px;width:100%;min-width:0;max-width:none}
+
+/* 统计卡 */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--navy-2)}
+.kpi.warn::before{background:var(--gold)}
+.kpi.bad::before{background:var(--red)}
+.kpi.ok::before{background:var(--teal)}
+.kpi .k{font-size:11.5px;color:var(--ink3);margin-bottom:6px}
+.kpi .v{font-size:24px;font-weight:600;letter-spacing:-.02em;font-family:var(--mono);line-height:1.2;color:var(--navy)}
+.kpi .u{font-size:11px;color:var(--ink3);margin-top:4px}
+.kpi.warn .v{color:var(--amber)}
+.kpi.bad .v{color:var(--red)}
+.kpi.ok .v{color:var(--teal)}
+
+/* 员工/会话表内小按钮 */
+.mini{padding:3px 9px;font-size:11.5px;border-radius:5px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel)}
+.mini:hover{border-color:var(--navy-2);color:var(--navy)}
+.mini.danger{color:var(--red);border-color:var(--red-line)}
+.mini.danger:hover{background:var(--red-bg)}
+
+.state{font-size:11px;padding:1px 7px;border-radius:8px;font-weight:500}
+.st-on{background:var(--teal-bg);color:var(--teal)}
+.st-off{background:var(--red-bg);color:var(--red)}
+.st-lock{background:var(--amber-bg);color:var(--amber)}
+/* 通用状态底色（变更流水线/观测页复用）：颜色语义与管理端既有状态一致 */
+.green-bg{background:var(--teal-bg);color:var(--teal)}
+.blue-bg{background:var(--blue-bg);color:var(--blue)}
+.amber-bg{background:var(--amber-bg);color:var(--amber)}
+.red-bg{background:var(--red-bg);color:var(--red)}
+.gray-bg{background:var(--gray-bg);color:var(--gray)}
+.btn.xs{padding:4px 9px;font-size:11.5px;border-radius:6px}
+
+.sec-title{font-size:12.5px;font-weight:600;color:var(--navy);margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.sec-title::before{content:"";width:3px;height:12px;border-radius:2px;background:var(--gold);flex:none}
+.sec-title::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media (max-width:1080px){.two-col{grid-template-columns:1fr}.shell{grid-template-columns:1fr}.sidenav{position:static;height:auto;display:flex;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);padding:0}.sidenav .grp{display:none}.sidenav button{width:auto;white-space:nowrap;border-left:none;border-bottom:2px solid transparent}.sidenav button.on{border-left:none;border-bottom-color:var(--gold)}}
+/* 工作台双栏在窄屏堆叠（导师意见：手机打开太挤） */
+@media (max-width:1080px){
+  .split{grid-template-columns:1fr;min-height:0}
+  .split>.card .case-list{max-height:300px;min-height:0}
+}
+/* 顶栏标题：宽屏显示全称，手机显示简称（避免挤掉三区指示灯） */
+.brand h1 .t-short{display:none}
+
+
+/* ================= OA：通知 / 请假 / 弹窗 ================= */
+
+.nbadge{display:inline-block;min-width:16px;height:16px;line-height:16px;text-align:center;
+  margin-left:5px;padding:0 4px;border-radius:8px;background:var(--red);color:#fff;
+  font-size:10.5px;font-weight:600;vertical-align:1px}
+
+.modal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center}
+.modal[hidden]{display:none}
+.modal-mask{position:absolute;inset:0;background:rgba(10,35,64,.45)}
+.modal-card{position:relative;width:min(680px,92vw);max-height:82vh;display:flex;flex-direction:column;
+  background:var(--panel);border-radius:10px;box-shadow:var(--shadow-lg)}
+.modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+  border-bottom:1px solid var(--line)}
+.modal-h h3{margin:0;font-size:15px;color:var(--navy)}
+.modal-b{padding:16px 18px;overflow-y:auto}
+
+.notice{padding:12px 14px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;background:var(--panel)}
+.notice.unread{background:var(--blue-bg);border-color:var(--blue-line);cursor:pointer}
+.notice.read{opacity:.82}
+.nrow1{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.nrow1 b{color:var(--ink)}
+.lvtag{font-size:11px;padding:1px 7px;border-radius:8px;font-weight:500;background:var(--gray-bg);color:var(--ink2)}
+.lvtag.lv-important{background:var(--amber-bg);color:var(--amber)}
+.lvtag.lv-urgent{background:var(--red-bg);color:var(--red)}
+.ndot{font-size:11px;padding:1px 7px;border-radius:8px;background:var(--red);color:#fff;font-weight:500}
+.nbody{font-size:13px;color:var(--ink2);line-height:1.55;margin-bottom:6px}
+.nmeta{font-size:11.5px;color:var(--ink3)}
+
+#lv-list table,#lv-list .empty{margin-top:10px}
+
+/* ================= OA：通讯录 / 站内私信 ================= */
+
+.modal-card.wide{width:min(880px,94vw);height:min(580px,82vh);padding:0}
+.modal-card.wide .modal-b{padding:0;height:calc(100% - 49px);display:flex}
+.dm-wrap{display:flex;width:100%;height:100%}
+.dm-list{width:200px;flex:none;border-right:1px solid var(--line);overflow-y:auto;background:var(--panel2)}
+/* 页面化后的私信/工单列表：随视口自适应，宽屏不再是一根 200px 窄条 */
+.page-body .dm-list{width:clamp(240px,20vw,360px);min-width:240px}
+.dm-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--line);transition:background .12s}
+.dm-item:hover{background:var(--blue-bg)}
+.dm-item.on{background:var(--blue-bg);border-left:2px solid var(--navy-2)}
+.di-row1{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.di-row1 b{font-size:13px;color:var(--ink)}
+.di-row2{font-size:11px;color:var(--ink3);margin-top:2px}
+.di-last{font-size:11.5px;color:var(--ink2);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dm-chat{flex:1;display:flex;flex-direction:column;min-width:0}
+.dm-head{flex:none;padding:11px 14px;border-bottom:1px solid var(--line);font-weight:600;font-size:13.5px;color:var(--navy);background:var(--panel);display:flex;align-items:center;gap:8px}
+.dm-head-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 手机端「列表 → 会话」返回键：宽屏下不显示 */
+.dm-back{display:none;align-items:center;gap:4px;flex:none;padding:3px 9px;border:1px solid var(--line2);
+  border-radius:6px;background:var(--panel);color:var(--ink2);font-size:12px;font-weight:500}
+.dm-back:active{background:var(--panel2)}
+.dm-msgs{flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:9px;background:var(--bg)}
+.dm-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:12.5px}
+.bubble{max-width:min(72%,680px);padding:8px 12px;border-radius:12px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.bubble .t{display:block;font-size:10px;opacity:.62;margin-top:3px;text-align:right}
+.bubble.in{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:3px;color:var(--ink)}
+.bubble.out{align-self:flex-end;background:var(--navy);color:#fff;border-bottom-right-radius:3px}
+.dm-input{flex:none;display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid var(--line);background:var(--panel)}
+.dm-input textarea{flex:1;resize:none;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:inherit;color:var(--ink);outline:none;background:var(--panel)}
+.dm-input textarea:focus{border-color:var(--navy-2);box-shadow:0 0 0 3px rgba(23,62,107,.1)}
+
+/* ---------- 第二期：客户反馈面板（M3） ---------- */
+.fb-chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:10.5px;font-weight:600;vertical-align:1px;white-space:nowrap}
+.fb-st-SUBMITTED{background:#eceff1;color:#546e7a}
+.fb-st-AI_ANSWERING{background:#e3f2fd;color:#1565c0}
+.fb-st-CLOSED_AI{background:#e0f2f1;color:#00695c}
+.fb-st-PENDING_HUMAN{background:#ffebee;color:#c62828}
+.fb-st-HUMAN_ANSWERING{background:#fff8e1;color:#b26a00}
+.fb-st-CLOSED_HUMAN{background:#e8eaf6;color:#3949ab}
+.fb-item{padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;overflow:hidden}
+.fb-item:hover{background:var(--bg, #f5f7fa)}
+.fb-item.on{background:#eef4fb}
+.fb-item.hot{box-shadow:inset 3px 0 0 #c62828}
+.fb-hot{display:inline-block;margin-left:0;padding:0 6px;border-radius:999px;background:#ffebee;color:#c62828;font-size:10px;font-weight:700;white-space:nowrap}
+.fb-tabs{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+/* 客户反馈弹窗布局：筛选标签条置顶（横向紧凑标签页），工单列表+会话占满剩余高度。
+   修复：此前 fb-tabs 作为 dm-wrap 的行内子项被拉伸成整列高大胶囊。 */
+.fb-layout{display:flex;flex-direction:column;width:100%;height:100%}
+.fb-layout .fb-tabs{flex:none}
+.fb-body{display:flex;flex:1;min-height:0;width:100%}
+/* 工单列表列：随视口自适应（窄屏 260px，宽屏可到 400px），右侧会话区吃掉剩余宽度 */
+.fb-body .dm-list{height:100%;width:clamp(280px,22vw,420px);min-width:280px}
+.fb-tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px 10px;font-size:11.5px;color:var(--ink3,#607d8b);cursor:pointer}
+.fb-tabs button.on{background:var(--navy,#1a237e);border-color:var(--navy,#1a237e);color:#fff;font-weight:600}
+.fb-fi-row1{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12.5px;min-width:0;flex-wrap:nowrap}
+.fb-fi-row1 b{color:var(--navy,#1a237e);flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.fb-fi-row1 .fb-hot,.fb-fi-row1 .fb-chip{flex:none}
+.fb-tags{display:inline-flex;align-items:center;gap:4px;flex:none}
+.fb-fi-row2{font-size:11.5px;color:var(--ink3,#90a4ae);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb-actions{display:flex;gap:8px;justify-content:flex-end;padding:10px 14px;border-top:1px solid var(--line)}
+.fb-note{font-size:11.5px;color:var(--ink3,#90a4ae);padding:6px 14px;border-top:1px solid var(--line)}
+.sys-note{text-align:center;font-size:11px;color:#90a4ae;margin:8px 0;line-height:1.5}
+.sys-note .t{display:block;font-size:10px;color:#b0bec5;margin-top:2px}
+
+/* ---------- 工作档案（坐席个人历史 / 管理端全员档案） ---------- */
+.ar-stats{display:flex;flex-wrap:wrap;gap:8px;padding:0 0 12px}
+.ar-stat{display:inline-block;padding:5px 12px;border:1px solid var(--line2,#e0e6ed);border-radius:8px;
+  font-size:12px;color:var(--ink2,#546e7a);background:var(--bg,#f7f9fb)}
+.ar-stat b{color:var(--navy,#1a237e);margin-right:6px}
+#ar-list table{margin-top:4px}
+#ar-list td{font-size:12px}
+
+
+/* ================= 手机端（≤760px）：现场用手机打开 =================
+   设计取舍：
+   1) 顶栏固定 56px 单行——三区状态只留指示灯（现场看灯就行，字挤成竖排更糟）；
+   2) 侧栏变横向 chip 条并隐藏滚动条，可滑动切换；
+   3) 工单/私信改「列表 → 会话」两级（微信式），不再上下各切一半；
+   4) 输入框字号提到 16px，iOS 不会因 <16px 自动放大页面；
+   5) 表格改为容器内横向滚动，宁可滑也不裁列。 */
+@media (max-width:760px){
+  /* ---- 顶栏 ---- */
+  .topbar{height:56px;min-height:56px;padding:0 10px;flex-wrap:nowrap;gap:10px}
+  .brand{gap:8px;min-width:0;flex:1 1 auto}
+  .brand .mark{width:26px;height:26px;font-size:13px;border-radius:7px}
+  .brand h1{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand h1 .t-full{display:none}
+  .brand h1 .t-short{display:inline}
+  .brand>span{display:none}
+  .zones{gap:7px;flex:none}
+  .zone{font-size:0;gap:0}
+  .zone .dot{width:6px;height:6px;box-shadow:none}
+  .who{padding-left:0;margin-left:0;border-left:none;gap:6px;flex-wrap:nowrap}
+  .who .nm{font-size:12px;max-width:5.5em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .who .nm .emp{display:none}
+  .who .role{display:none}
+  .linkbtn{font-size:12px;padding:5px 7px}
+
+  /* ---- 侧栏：横滑 chip 条 ---- */
+  .sidenav{padding:0;scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior-x:contain}
+  .sidenav::-webkit-scrollbar{display:none}
+  #ar-list::-webkit-scrollbar,.card-b::-webkit-scrollbar{height:4px}
+  #ar-list::-webkit-scrollbar-thumb,.card-b::-webkit-scrollbar-thumb{background:var(--line2);border-radius:2px}
+  .sidenav button{padding:10px 12px;font-size:12.5px}
+
+  /* ---- 页面骨架 ---- */
+  main{padding:12px 10px 28px}
+  .page-card{min-height:calc(100vh - 148px);min-height:calc(100dvh - 148px);border-radius:8px}
+  .page-body{padding:12px}
+  .page-body.fill{height:calc(100vh - 148px);height:calc(100dvh - 148px);min-height:320px;padding:0}
+  .card-h,.card-b{padding:10px 12px}
+  .card-h h2{font-size:12.5px}
+  .card-h .muted{font-size:11px}
+
+  /* ---- 触控与输入 ---- */
+  input,textarea,select{font-size:16px}
+  .btn{padding:9px 14px;font-size:13px}
+  .btn.sm{padding:8px 12px;font-size:12.5px}
+  .dm-input .btn,.btn-row .btn{min-height:40px}
+  .field textarea{min-height:64px}
+
+  /* ---- 双栏堆叠 ---- */
+  .split{grid-template-columns:1fr;gap:12px;min-height:0}
+  .split>.card .case-list{max-height:42vh;min-height:0}
+
+  /* ---- 工单 / 私信：两级切换 ---- */
+  .fb-body,.dm-wrap{flex-direction:column}
+  .page-body .dm-list,.fb-body .dm-list{width:100%;min-width:0;height:100%;max-height:none;
+    border-right:none;border-bottom:none}
+  .fb-body.is-chat .dm-list,.dm-wrap.is-chat .dm-list{display:none}
+  .fb-body.is-list .dm-chat,.dm-wrap.is-list .dm-chat{display:none}
+  /* 选择器加权：基础样式里 .dm-back{display:none} 在本文件更后面，不加权会被盖掉 */
+  .dm-head .dm-back{display:inline-flex}
+  .dm-head{padding:9px 12px;font-size:13px}
+  .dm-input{padding:8px 10px;gap:6px}
+  .bubble{max-width:84%;font-size:13px}
+  .fb-tabs{padding:6px 8px;gap:4px}
+  .fb-tabs button{padding:4px 9px;font-size:11.5px}
+
+  /* ---- 表格：横向滚动，不裁列 ---- */
+  #ar-list,.card-b,.admin-main .card{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  table{min-width:560px;font-size:12px}
+  th,td{padding:7px 8px}
+
+  /* ---- 其他 ---- */
+  .compare{grid-template-columns:1fr}
+  .side+.side{border-left:none;border-top:1px dashed var(--line2)}
+  .modal-card{width:94vw;max-height:88vh;max-height:88dvh}
+  .modal-card.wide{width:100vw;height:90vh;height:90dvh}
+  .meta-grid{grid-template-columns:1fr 1fr}
+  pre.json{max-height:200px}
+  .sec-title{margin:16px 0 8px}
+  .footbar{margin-top:20px}
+  .footbar .fin{padding:12px 14px;font-size:11px;gap:8px}
+  main,.admin-main{padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+}
+
+/* 管理端手机：顶部操作按钮换到第二行，别在 390px 里挤成一坨 */
+@media (max-width:760px){
+  .app-admin .topbar{height:auto;min-height:56px;flex-wrap:wrap;padding:6px 10px;row-gap:4px}
+  .app-admin .who{width:100%;justify-content:flex-end;gap:4px;padding-top:4px;
+    border-top:1px solid rgba(255,255,255,.12)}
+  .app-admin .who .nm{max-width:9em}
+}

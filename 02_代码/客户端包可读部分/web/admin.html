@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理控制台 · 内网可信域</title>
+<link rel="stylesheet" href="/assets/app.css?v=1.5.0">
+</head>
+<body class="app-admin">
+
+<div class="topbar">
+  <div class="brand">
+    <div class="mark">光</div>
+    <h1><span class="t-full">管理控制台</span><span class="t-short">管理台</span></h1>
+    <span>内网可信域 · 运营与合规</span>
+  </div>
+  <div class="zones">
+    <div class="zone"><span class="dot wait" id="d-inner"></span>内网</div>
+    <div class="zone"><span class="dot wait" id="d-dmz"></span>DMZ</div>
+    <div class="zone"><span class="dot wait" id="d-outer"></span>外网</div>
+    <div class="who" style="margin-left:8px;padding-left:16px;border-left:1px solid rgba(255,255,255,.22)">
+      <span class="nm" id="me-name">—</span>
+      <span class="role" id="me-role">—</span>
+      <button class="linkbtn" id="btn-dm">通讯录<span class="nbadge" id="dmbadge" hidden></span></button>
+      <button class="linkbtn" id="btn-archive">工作档案</button>
+      <button class="linkbtn" id="btn-pwd">改密</button>
+      <button class="linkbtn" id="logout">退出</button>
+    </div>
+  </div>
+</div>
+
+<div class="shell">
+  <nav class="sidenav" id="nav"></nav>
+  <div class="admin-main">
+
+    <!-- 概览 -->
+    <section class="page" id="page-overview">
+      <div class="kpis" id="kpis"></div>
+      <div class="sec-title">处理分布</div>
+      <div class="card"><div class="card-b" id="dist"></div></div>
+      <div class="warnbox" style="margin-top:16px">
+        <b>概览只显示聚合数字。</b>样本量低于阈值时，统计接口本身就会拒绝返回明细——小样本反推是真实存在的重识别路径，不因为"只是给管理员看"而失效。
+      </div>
+    </section>
+
+    <!-- 工单 -->
+    <section class="page" id="page-tickets" hidden>
+      <div class="card">
+        <div class="card-h"><h2>全部工单</h2><span class="muted" id="ticket-count">—</span></div>
+        <div class="card-b" style="padding:0" id="ticket-body"><div class="empty">加载中…</div></div>
+      </div>
+      <div class="hint">坐席端只能看到本人工单；此处为全量视图，访问本身记录审计。</div>
+    </section>
+
+    <!-- 审计 -->
+    <section class="page" id="page-audit" hidden>
+      <div class="card">
+        <div class="card-h"><h2>三区审计事件</h2>
+          <div class="btn-row">
+            <input id="audit-rid" placeholder="按 request_id 过滤（可留空）" style="padding:6px 10px;border:1px solid var(--line2);border-radius:6px;width:250px">
+            <button class="btn ghost sm" id="audit-go">查询</button>
+          </div>
+        </div>
+        <div class="card-b" style="padding:0"><div id="audit-body"><div class="empty">加载中…</div></div></div>
+      </div>
+      <div class="warnbox" style="margin-top:14px">
+        <b>审计不含明文。</b>事件在落盘前统一过脱敏层：卡号、手机号、证件号、金额均被替换。登录事件只记账号、入口、来源 IP 与结果，口令永不入日志。
+      </div>
+    </section>
+
+    <!-- 规则 -->
+    <section class="page" id="page-rules" hidden>
+      <div class="card">
+        <div class="card-h"><h2>规则库（生产版本）</h2><span class="muted" id="rule-count">—</span></div>
+        <div class="card-b" style="padding:0" id="rule-body"></div>
+      </div>
+      <div class="hint">此表为生产生效版本，只读。任何修改须经 MCP 提交变更草稿 → 沙箱验证 → 审批，不会直接落到这里。</div>
+    </section>
+
+    <!-- 变更 -->
+    <section class="page" id="page-changes" hidden>
+      <div class="card">
+        <div class="card-h"><h2>变更草稿区</h2><span class="muted" id="change-count">—</span></div>
+        <div class="card-b" style="padding:0" id="change-body"><div class="empty">加载中…</div></div>
+      </div>
+      <div class="hint">草稿区与生产规则物理分离。提交后状态恒为 PENDING_REVIEW，未审批前不改变任何线上行为。</div>
+    </section>
+
+    <!-- 账号与会话 -->
+    <section class="page" id="page-accounts" hidden>
+      <div class="sec-title">创建账号</div>
+      <div class="card" style="margin-bottom:4px">
+        <div class="card-b">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+            <div class="field"><label>工号</label><input id="nu-emp" placeholder="如 E1005"></div>
+            <div class="field"><label>姓名</label><input id="nu-name" placeholder="如 钱新员"></div>
+            <div class="field"><label>账号（小写）</label><input id="nu-user" placeholder="如 e1005"></div>
+            <div class="field"><label>初始口令（≥8位）</label><input id="nu-pwd" placeholder="仅 PoC 可见，请私下分发"></div>
+            <div class="field"><label>角色</label>
+              <select id="nu-role">
+                <option value="agent">客服坐席（坐席端）</option>
+                <option value="supervisor">客服主管（管理端）</option>
+                <option value="auditor">审计员（管理端）</option>
+                <option value="developer">科技开发（管理端）</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary sm" id="nu-create">创建账号</button>
+            <span class="hint" id="nu-msg">系统没有公开注册——同事账号只能由管理员在此发放，口令线下私下告知。</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-title">账号</div>
+      <div class="card"><div class="card-b" style="padding:0" id="user-body"><div class="empty">加载中…</div></div></div>
+      <div class="sec-title">在线会话</div>
+      <div class="card"><div class="card-b" style="padding:0" id="sess-body"><div class="empty">加载中…</div></div></div>
+      <div class="warnbox" style="margin-top:14px">
+        <b>会话是服务端可吊销的。</b>令牌只携带会话编号，状态在库里存着——所以停用账号、重置密码或吊销会话会立即生效，而不是"等到令牌过期"。这是纯无状态令牌做不到的。
+        同一账号默认只允许一个活跃会话（单会话互踢），防止账号被共享。
+      </div>
+    </section>
+
+    <!-- 通知公告 -->
+    <section class="page" id="page-notices" hidden>
+      <div class="card" style="margin-bottom:4px">
+        <div class="card-h"><h2>发布通知</h2><span class="muted">全员可见 · 坐席端顶栏角标提醒</span></div>
+        <div class="card-b">
+          <div class="field"><label>标题（1-80 字）</label><input id="nt-title" placeholder="例如：关于国庆值班安排的通知" maxlength="80"></div>
+          <div class="field"><label>正文（1-2000 字）</label>
+            <textarea id="nt-body" style="min-height:80px" maxlength="2000" placeholder="通知正文"></textarea></div>
+          <div class="btn-row">
+            <div class="field" style="min-width:160px"><label>级别</label>
+              <select id="nt-level">
+                <option value="normal">常规</option>
+                <option value="important">重要</option>
+                <option value="urgent">紧急</option>
+              </select>
+            </div>
+            <button class="btn primary sm" id="nt-pub" style="align-self:flex-end">发布通知</button>
+            <span class="hint" id="nt-msg"></span>
+          </div>
+        </div>
+      </div>
+      <div class="sec-title">已发布通知</div>
+      <div class="card"><div class="card-b" style="padding:0" id="nt-list"><div class="empty">加载中…</div></div></div>
+    </section>
+
+    <!-- 请假审批 -->
+    <section class="page" id="page-leaves" hidden>
+      <div class="card">
+        <div class="card-h"><h2>待审批申请</h2><span class="muted" id="lv-count">—</span></div>
+        <div class="card-b" style="padding:0" id="lv-pending"><div class="empty">加载中…</div></div>
+      </div>
+      <div class="hint">同一申请只能审批一次（乐观锁语义），不能审批自己的申请；审批动作与意见全部进入审计。</div>
+    </section>
+
+    <!-- MCP -->
+    <section class="page" id="page-mcp" hidden>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-h"><h2>受控工具目录</h2><span class="muted">经 DMZ 网关</span></div>
+          <div class="card-b" id="mcp-list"><div class="empty">加载中…</div></div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-h"><h2>调用面板</h2><span class="muted" id="mcp-state">待调用</span></div>
+            <div class="card-b">
+              <div class="field">
+                <label>工具</label>
+                <select id="mcp-tool"></select>
+              </div>
+              <div class="field">
+                <label>调用身份（取自当前会话，不可选择）</label>
+                <input id="mcp-role" disabled>
+              </div>
+              <div class="field">
+                <label>参数（JSON）</label>
+                <textarea id="mcp-args" style="min-height:60px;font-family:var(--mono);font-size:12px">{"domain":"dispute"}</textarea>
+              </div>
+              <button class="btn primary" id="mcp-run">经 DMZ 调用</button>
+              <div class="hint">路径：浏览器 → 内网（会话校验）→ DMZ（服务凭证）→ 内网 Facade（工具级授权）。角色在内网入口就已定死，前端没有机会声明自己是开发者。</div>
+            </div>
+          </div>
+          <div class="mcp-out" id="mcp-out">// 调用结果将显示在此处</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 验收 -->
+    <!-- 运行观测（C9）：失败率/规则命中/人工驳回/MCP 拒绝/端点分布/出域统计 -->
+    <section class="page" id="page-observe" hidden>
+      <div class="kpis" id="ob-kpis"><div class="empty">加载中…</div></div>
+      <div class="sec-title">模型端点分布</div>
+      <div class="card"><div class="card-b" id="ob-endpoints"><div class="empty">加载中…</div></div></div>
+      <div class="sec-title">口径说明</div>
+      <div class="card"><div class="card-b" id="ob-note" style="font-size:12.5px;color:var(--ink2);line-height:1.8">—</div></div>
+      <div class="warnbox" style="margin-top:14px">
+        <b>观测数据全部来自既有审计库与工单表</b>，没有为观测新增任何埋点。
+        这意味着"能不能被观测"与"业务有没有被改写"是两件事——观测本身不会扩大数据面。
+      </div>
+    </section>
+
+    <section class="page" id="page-acc" hidden>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-h"><h2>放行条件 · 数据边界（T）· 访问控制（A）· OA 化（OA）</h2><span class="muted" id="acc-sum">—</span></div>
+        <div class="card-b"><div class="acc-grid" id="acc-grid"><div class="empty">运行 <code>pytest -q</code> 后刷新</div></div></div>
+      </div>
+      <div class="warnbox">
+        <b>关键缺陷：</b>原始客户信息出域、MCP 越权、跨会话恢复、外网直连内网库、未经审批的规则修改、账号冒用与越权读审计。任一未通过，不得作为演示版本。
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<!-- OA 弹窗（通讯录/私信） -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-mask" id="modal-mask"></div>
+  <div class="modal-card">
+    <div class="modal-h"><h3 id="modal-title">—</h3><button class="mini" id="modal-x">关闭</button></div>
+    <div class="modal-b" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+const HOST = location.hostname || '127.0.0.1';
+const DMZ = `http://${HOST}:8102`, OUTER = `http://${HOST}:8103`, API = '';
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const ROLE_CN = {agent:'客服坐席', supervisor:'客服主管', auditor:'审计员', developer:'科技开发'};
+
+const NAV = [
+  ['overview', '运营概览', ['supervisor','auditor','developer']],
+  ['tickets', '全部工单', ['supervisor','auditor']],
+  ['audit', '审计追溯', ['supervisor','auditor']],
+  ['rules', '规则库', ['supervisor','auditor','developer']],
+  ['changes', '变更审批', ['supervisor','auditor','developer']],
+  ['notices', '通知公告', ['supervisor']],
+  ['leaves', '请假审批', ['supervisor']],
+  ['accounts', '账号与会话', ['supervisor']],
+  ['mcp', 'MCP 受控工具', ['supervisor','auditor','developer']],
+  ['acc', '验收看板', ['supervisor','auditor','developer']],
+  ['observe', '运行观测', ['supervisor','auditor']],
+];
+
+let me = null;
+const loaded = new Set();
+
+async function api(path, opts = {}) {
+  const r = await fetch(`${API}${path}`, {credentials: 'same-origin', ...opts});
+  if (r.status === 401) { location.href = '/login?reason=expire'; throw new Error('未登录'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return d;
+}
+
+/* ---------- boot ---------- */
+async function boot() {
+  const r = await fetch(`${API}/internal/api/v1/auth/me`, {credentials: 'same-origin'});
+  if (!r.ok) { location.href = '/login?reason=expire'; return; }
+  me = await r.json();
+  if (me.portal !== 'admin') { location.href = '/client'; return; }
+  if (me.must_change_pwd) { location.href = '/change-password'; return; }
+  $('#me-name').innerHTML = `${me.name}<span class="emp">（${me.emp_id}）</span>`;
+  const tag = $('#me-role');
+  tag.textContent = ROLE_CN[me.role] || me.role;
+  tag.className = 'role r-' + me.role;
+
+  const allowed = NAV.filter(n => n[2].includes(me.role));
+  $('#nav').innerHTML = allowed.map(([id, label], i) =>
+    `<button data-page="${id}" class="${i === 0 ? 'on' : ''}">${label}</button>`).join('');
+  document.querySelectorAll('#nav button').forEach(b => b.onclick = () => go(b.dataset.page));
+  go(allowed[0][0]);
+
+  healthCheck();
+  setInterval(healthCheck, 10000);
+  refreshDmBadge();
+  setInterval(refreshDmBadge, 30000);
+}
+
+function go(id) {
+  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.page === id));
+  document.querySelectorAll('.page').forEach(p => p.hidden = p.id !== 'page-' + id);
+  const fn = {overview: loadOverview, tickets: loadTickets, audit: loadAudit, rules: loadRules,
+              changes: loadChanges, notices: loadNotices, leaves: loadLeaves,
+              accounts: loadAccounts, mcp: loadMcp, acc: loadAcc, observe: loadObserve}[id];
+  if (fn && !loaded.has(id)) { loaded.add(id); fn().catch(showErr); }
+}
+
+function showErr(e) {
+  console.warn(e);
+}
+
+/* ---------- OA：通讯录与站内私信 ---------- */
+let dmTimer = null;
+let dmPeer = null;
+
+function openModal(title, html, opts = {}) {
+  $('#modal-title').textContent = title;
+  $('#modal-body').innerHTML = html;
+  $('#modal').hidden = false;
+  document.querySelector('#modal .modal-card').classList.toggle('wide', !!opts.wide);
+}
+function closeModal() {
+  $('#modal').hidden = true;
+  document.querySelector('#modal .modal-card').classList.remove('wide');
+  if (dmTimer) { clearInterval(dmTimer); dmTimer = null; }
+  dmPeer = null;
+}
+$('#modal-x').onclick = closeModal;
+$('#modal-mask').onclick = closeModal;
+
+async function refreshDmBadge() {
+  try {
+    const d = await api('/internal/api/v1/dms/unread');
+    const b = $('#dmbadge');
+    b.hidden = !d.unread;
+    b.textContent = d.unread > 99 ? '99+' : d.unread;
+  } catch (e) {}
+}
+
+function dmOpen() {
+  openModal('通讯录 · 站内私信', `
+    <div class="dm-wrap">
+      <div class="dm-list" id="dm-list"><div class="empty">加载中…</div></div>
+      <div class="dm-chat" id="dm-chat">
+        <div class="dm-empty">从左侧选择同事开始私信</div>
+      </div>
+    </div>`, {wide: true});
+  loadDmContacts();
+  dmTimer = setInterval(() => { refreshDmBadge(); if (dmPeer) loadDmThread(dmPeer, true); }, 5000);
+}
+$('#btn-dm').onclick = dmOpen;
+
+async function loadDmContacts() {
+  const d = await api('/internal/api/v1/dms/contacts');
+  const items = d.items || [];
+  $('#dm-list').innerHTML = items.length ? items.map(p => `
+    <div class="dm-item" data-emp="${esc(p.emp_id)}">
+      <div class="di-row1"><b>${esc(p.name)}</b>
+        ${p.unread ? `<span class="nbadge">${p.unread > 99 ? '99+' : p.unread}</span>` : ''}</div>
+      <div class="di-row2">${ROLE_CN[p.role] || esc(p.role)} · ${esc(p.emp_id)}</div>
+      ${p.last_body ? `<div class="di-last">${p.last_sender === d.me ? '我：' : ''}${esc(p.last_body.slice(0, 24))}</div>` : ''}
+    </div>`).join('') : '<div class="empty">暂无联系人</div>';
+  document.querySelectorAll('.dm-item').forEach(el => {
+    el.classList.toggle('on', el.dataset.emp === dmPeer);
+    el.onclick = () => {
+      document.querySelectorAll('.dm-item').forEach(x => x.classList.remove('on'));
+      el.classList.add('on');
+      loadDmThread(el.dataset.emp);
+    };
+  });
+}
+
+function dmMsgHtml(msgs, meId) {
+  return msgs.length ? msgs.map(m => `
+    <div class="bubble ${m.sender_emp_id === meId ? 'out' : 'in'}">
+      ${esc(m.body)}<span class="t">${esc((m.created_at || '').replace('T', ' ').slice(5, 16))}${m.sender_emp_id === meId && m.read_at ? ' · 已读' : ''}</span>
+    </div>`).join('') : '<div class="dm-empty">还没有消息，发第一条私信吧</div>';
+}
+
+async function loadDmThread(empId, silent = false) {
+  const d = await api(`/internal/api/v1/dms/with/${empId}`);
+  if (dmPeer && dmPeer !== empId && silent) return;
+  const switching = dmPeer !== empId;
+  dmPeer = empId;
+  const msgs = d.items || [];
+
+  if (switching || !$('#dm-msgs')) {
+    // 全量重建：仅切换会话 / 首次打开时执行
+    $('#dm-chat').innerHTML = `
+      <div class="dm-head">${esc(d.peer.name)}（${esc(d.peer.emp_id)}） · ${ROLE_CN[d.peer.role] || esc(d.peer.role)}</div>
+      <div class="dm-msgs" id="dm-msgs">${dmMsgHtml(msgs, me.emp_id)}</div>
+      <div class="dm-input">
+        <textarea id="dm-text" maxlength="500" rows="2" placeholder="输入消息，Enter 发送，Shift+Enter 换行（500 字以内）"></textarea>
+        <button class="btn primary sm" id="dm-send">发送</button>
+      </div>`;
+    const box = $('#dm-msgs');
+    box.scrollTop = box.scrollHeight;
+    const send = async () => {
+      const text = $('#dm-text').value.trim();
+      if (!text) return;
+      const btn = $('#dm-send');
+      btn.disabled = true;
+      try {
+        await api('/internal/api/v1/dms', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({to_emp_id: empId, body: text})});
+        $('#dm-text').value = '';
+        await loadDmThread(empId, true);
+        loadDmContacts();
+        refreshDmBadge();
+      } catch (ex) { alert(ex.message); }
+      btn.disabled = false;
+    };
+    $('#dm-send').onclick = send;
+    $('#dm-text').onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
+    };
+  } else {
+    // 静默刷新：只更新消息列表，不重建输入框（保留正在输入的内容与焦点）
+    const box = $('#dm-msgs');
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.innerHTML = dmMsgHtml(msgs, me.emp_id);
+    if (nearBottom) box.scrollTop = box.scrollHeight;
+  }
+  // 打开会话即已读：立即清掉该联系人与顶栏的红点（不等下一次轮询）
+  loadDmContacts();
+  refreshDmBadge();
+}
+
+$('#btn-pwd').onclick = () => { location.href = '/change-password'; };
+
+/* ---------- 第二期：工作档案（管理员不处理反馈，只看全员处理档案） ---------- */
+const FB_CAT_CN = {ACCOUNT: '账户', LOAN: '贷款', CREDIT_CARD: '信用卡', OTHER: '其他'};
+const FB_ST_CN = {SUBMITTED: '已受理', AI_ANSWERING: 'AI 应答中', CLOSED_AI: 'AI 已回复',
+  PENDING_HUMAN: '待人工接管', HUMAN_ANSWERING: '人工处理中', CLOSED_HUMAN: '已办结'};
+
+function fbChip(st) {
+  return `<span class="fb-chip fb-st-${esc(st)}">${FB_ST_CN[st] || esc(st)}</span>`;
+}
+
+function fbTime(s) { return esc((s || '').replace('T', ' ').slice(0, 16)); }
+
+async function loadArchive() {
+  const d = await api('/internal/api/v1/feedback/archive');
+  const items = d.items || [];
+  const stats = d.stats || [];
+  $('#ar-stats').innerHTML = stats.length ? stats.map(s =>
+    `<span class="ar-stat"><b>${esc(s.agent_name || s.assigned_emp)}</b>接管 ${s.total} 单 · 办结 ${s.closed} 单</span>`
+  ).join('') : '<span class="muted">暂无坐席经手记录（AI 应答的单不计入坐席档案）</span>';
+  $('#ar-list').innerHTML = items.length ? `
+    <table><thead><tr>
+      <th>工单号</th><th>类型</th><th>状态</th><th>接管坐席</th><th>回复数</th><th>创建时间</th><th>最近动态</th>
+    </tr></thead><tbody>${items.map(t => `
+      <tr>
+        <td>${esc(t.fb_id)}</td>
+        <td>${FB_CAT_CN[t.category] || esc(t.category)}</td>
+        <td>${fbChip(t.status)}</td>
+        <td>${esc(t.agent_name || t.assigned_emp || '—')}</td>
+        <td>${t.reply_count}</td>
+        <td>${fbTime(t.created_at)}</td>
+        <td>${fbTime(t.updated_at)}</td>
+      </tr>`).join('')}</tbody></table>` : '<div class="empty">档案库暂无记录</div>';
+}
+
+$('#btn-archive').onclick = () => {
+  openModal('工作档案 · 全员客户反馈处理记录', `
+    <div class="ar-stats" id="ar-stats"><span class="muted">加载中…</span></div>
+    <div id="ar-list"><div class="empty">加载中…</div></div>`);
+  loadArchive();
+};
+
+$('#logout').onclick = async () => {
+  await fetch(`${API}/internal/api/v1/auth/logout`, {method: 'POST', credentials: 'same-origin'});
+  location.href = '/login?reason=expire';
+};
+
+/* ---------- health ---------- */
+async function ping(url, el) {
+  try {
+    const r = await fetch(url, {signal: AbortSignal.timeout(2500)});
+    document.getElementById(el).className = 'dot ' + (r.ok ? 'ok' : 'bad');
+  } catch (e) { document.getElementById(el).className = 'dot bad'; }
+}
+function healthCheck() {
+  ping(`${API}/internal/api/v1/health`, 'd-inner');
+  ping(`${DMZ}/dmz/api/v1/health`, 'd-dmz');
+  ping(`${OUTER}/outer/api/v1/health`, 'd-outer');
+}
+
+/* ---------- 概览 ---------- */
+async function loadOverview() {
+  const s = await api('/internal/api/v1/stats');
+  const t = s.tickets_by_status || {};
+  const total = Object.values(t).reduce((a, b) => a + b, 0);
+  const handoff = (t.HUMAN_HANDOFF || 0) + (t.BLOCKED || 0);
+  const auto = total - handoff;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><div class="k">工单总数</div><div class="v">${total}</div><div class="u">全部处理请求</div></div>
+    <div class="kpi ok"><div class="k">自动可展示</div><div class="v">${Math.max(auto, 0)}</div><div class="u">规则裁决通过</div></div>
+    <div class="kpi warn"><div class="k">转人工 / 拦截</div><div class="v">${handoff}</div><div class="u">规则否决或边界阻断</div></div>
+    <div class="kpi"><div class="k">令牌映射</div><div class="v">${s.tokens ?? '—'}</div><div class="u">内网加密存放</div></div>
+    <div class="kpi"><div class="k">在线会话</div><div class="v">${s.live_sessions ?? '—'}</div><div class="u">可即时吊销</div></div>
+    <div class="kpi ${(s.auth_events || 0) > 0 ? 'bad' : ''}"><div class="k">认证异常</div><div class="v">${s.auth_events ?? 0}</div><div class="u">失败 / 锁定 / 越权</div></div>`;
+
+  const rows = Object.entries(t);
+  $('#dist').innerHTML = rows.length ? `<table>
+    <tr><th>状态</th><th>数量</th><th style="width:60%">占比</th></tr>
+    ${rows.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${v}</td>
+      <td><div style="background:var(--panel2);border-radius:3px;height:7px;overflow:hidden">
+        <div style="width:${total ? Math.round(v / total * 100) : 0}%;height:100%;background:var(--teal)"></div></div></td></tr>`).join('')}
+  </table>` : '<div class="empty">暂无工单</div>';
+}
+
+/* ---------- 工单 ---------- */
+async function loadTickets() {
+  const rows = await api('/internal/api/v1/tickets?limit=200');
+  $('#ticket-count').textContent = rows.length + ' 条';
+  if (!rows.length) { $('#ticket-body').innerHTML = '<div class="empty">暂无工单</div>'; return; }
+  $('#ticket-body').innerHTML = `<table>
+    <tr><th style="width:180px">请求编号</th><th style="width:70px">坐席</th><th style="width:60px">案例</th>
+    <th style="width:120px">状态</th><th style="width:140px">决策</th><th style="width:140px">时间</th><th>原因码</th></tr>
+    ${rows.map(t => `<tr>
+      <td class="mono">${esc(t.request_id)}</td>
+      <td class="mono">${esc(t.emp_id)}</td>
+      <td class="mono">${esc(t.case_id)}</td>
+      <td>${esc(t.status)}</td>
+      <td>${esc(t.decision || '—')}</td>
+      <td class="mono" style="font-size:11px">${esc((t.created_at || '').replace('T', ' '))}</td>
+      <td class="mono" style="font-size:11px">${esc(t.reason_codes || '—')}</td>
+    </tr>`).join('')}</table>`;
+}
+
+/* ---------- 审计 ---------- */
+async function loadAudit() {
+  const rid = $('#audit-rid').value.trim();
+  const data = await api(`/internal/api/v1/audit${rid ? '?request_id=' + encodeURIComponent(rid) : ''}`);
+  const rows = [];
+  for (const [zone, evs] of Object.entries(data)) {
+    for (const e of evs) rows.push({...e, zone_label: {inner:'内网', dmz:'DMZ', outer:'外网'}[zone] || zone});
+  }
+  rows.sort((a, b) => b.id - a.id);
+  if (!rows.length) { $('#audit-body').innerHTML = '<div class="empty">暂无事件</div>'; return; }
+  $('#audit-body').innerHTML = `<table>
+    <tr><th style="width:150px">时间</th><th style="width:55px">区域</th><th style="width:170px">事件</th>
+    <th style="width:150px">请求 / 会话</th><th style="width:70px">级别</th><th>详情</th></tr>
+    ${rows.slice(0, 300).map(e => `<tr>
+      <td class="mono" style="font-size:11px">${esc((e.ts || '').replace('T', ' '))}</td>
+      <td>${esc(e.zone_label)}</td>
+      <td class="mono">${esc(e.event)}</td>
+      <td class="mono" style="font-size:11px">${esc(e.request_id || '—')}</td>
+      <td class="sev-${esc(e.severity)}">${esc(e.severity)}</td>
+      <td class="mono" style="font-size:11px;max-width:520px;overflow:hidden;text-overflow:ellipsis">${esc(e.detail || '')}</td>
+    </tr>`).join('')}</table>`;
+}
+$('#audit-go').onclick = () => loadAudit().catch(showErr);
+
+/* ---------- 规则 ---------- */
+async function loadRules() {
+  const rows = await api('/internal/api/v1/rules');
+  $('#rule-count').textContent = rows.length + ' 条';
+  $('#rule-body').innerHTML = `<table>
+    <tr><th style="width:130px">规则编号</th><th style="width:70px">版本</th><th style="width:80px">域</th>
+    <th style="width:200px">标题</th><th>摘要</th><th style="width:80px">强制人工</th><th style="width:70px">状态</th></tr>
+    ${rows.map(r => `<tr>
+      <td class="mono">${esc(r.rule_id)}</td><td class="mono">${esc(r.version)}</td>
+      <td>${esc(r.domain)}</td><td>${esc(r.title)}</td>
+      <td style="font-size:12px">${esc(r.summary)}</td>
+      <td>${r.mandatory_human ? '<span class="state st-lock">是</span>' : '否'}</td>
+      <td>${esc(r.status)}</td>
+    </tr>`).join('')}</table>`;
+}
+
+/* ---------- 运行观测 ---------- */
+async function loadObserve() {
+  const d = await api('/internal/api/v1/observe');
+  const pct = v => (v * 100).toFixed(1) + '%';
+  const kpi = (label, value, sub, cls) => `
+    <div class="kpi ${cls || ''}"><div class="k">${label}</div>
+      <div class="v">${value}</div><div class="s">${sub}</div></div>`;
+  const t = d.tickets, r = d.rules, h = d.human, m = d.mcp, e = d.egress;
+  $('#ob-kpis').innerHTML =
+    kpi('工单总数', t.total, '全量口径', '') +
+    kpi('失败率', pct(t.fail_rate), `拒绝/超时/阻断 ${t.fail} 单`, t.fail_rate > 0.2 ? 'warn' : '') +
+    kpi('规则命中率', pct(r.hit_rate), `命中 ${r.hit} 单`, '') +
+    kpi('人工转接率', pct(h.handoff_rate), `已裁决 ${h.decided} 单`, '') +
+    kpi('MCP 拒绝数', m.denied, '角色越权/未注册工具', m.denied > 0 ? 'warn' : '') +
+    kpi('限流次数', m.rate_limited, '429 + RATE_LIMITED 审计', '') +
+    kpi('出域通过', e.accepted, `拒绝 ${e.denied}（拒绝率 ${pct(e.deny_rate)}）`, '') +
+    kpi('复原拒绝', d.restore_denied, '三元匹配不通过', d.restore_denied > 0 ? 'warn' : '');
+
+  const eps = Object.entries(d.endpoints || {});
+  $('#ob-endpoints').innerHTML = eps.length
+    ? `<table><tr><th>模型供应商</th><th style="width:100px">工单数</th><th>说明</th></tr>
+       ${eps.map(([k, v]) => `<tr><td class="mono">${esc(k)}</td><td>${v}</td>
+         <td style="font-size:12px;color:var(--ink2)">实际承载该供应商调用的工单数</td></tr>`).join('')}</table>`
+    : '<div class="empty">暂无需观测的模型调用（可能全为内网 Mock）</div>';
+
+  $('#ob-note').innerHTML = `生成时间 <span class="mono">${esc(d.generated_at)}</span><br>
+    统计窗口：${esc(d.window)}<br>${esc(d.note)}`;
+}
+
+/* ---------- 变更审批发布流水线 ----------
+   状态机：PENDING_REVIEW →(审批) APPROVED →(门槛) →(发布) PUBLISHED →(回滚) ROLLED_BACK
+   前端按钮只做"显示"，真正的闸门全在服务端（自审批/门槛/指纹三重校验）。
+   故意不做"一键全部通过"：每一步都要人点，因为每步都有不同的责任人。 */
+const CHG_STATE = {
+  PENDING_REVIEW: ['amber-bg', '待审批'],
+  APPROVED: ['blue-bg', '已批准'],
+  PUBLISHED: ['green-bg', '已发布'],
+  ROLLED_BACK: ['red-bg', '已回滚'],
+  REJECTED: ['gray-bg', '已驳回'],
+};
+
+function chgActions(c) {
+  const canReview = c.status === 'PENDING_REVIEW';
+  const canGate = ['PENDING_REVIEW', 'APPROVED'].includes(c.status);
+  const canPublish = c.status === 'APPROVED';
+  const canRollback = c.status === 'PUBLISHED';
+  let h = '';
+  if (canGate) h += `<button class="btn ghost xs" data-act="gate" data-id="${esc(c.change_id)}">门槛检查</button> `;
+  if (canReview) h += `<button class="btn primary xs" data-act="approve" data-id="${esc(c.change_id)}">通过</button>
+    <button class="btn ghost xs" data-act="reject" data-id="${esc(c.change_id)}">驳回</button> `;
+  if (canPublish) h += `<button class="btn primary xs" data-act="publish" data-id="${esc(c.change_id)}">发布</button> `;
+  if (canRollback) h += `<button class="btn ghost xs" data-act="rollback" data-id="${esc(c.change_id)}">回滚</button> `;
+  return h || '<span class="muted" style="font-size:11px">—</span>';
+}
+
+async function loadChanges() {
+  const rows = await api('/internal/api/v1/changes');
+  $('#change-count').textContent = rows.length + ' 条';
+  if (!rows.length) { $('#change-body').innerHTML = '<div class="empty">暂无变更草稿</div>'; return; }
+  $('#change-body').innerHTML = `<table>
+    <tr><th style="width:96px">变更号</th><th style="width:66px">类型</th><th style="width:70px">提交人</th>
+    <th style="width:78px">状态</th><th style="width:70px">版本</th><th style="width:64px">门槛</th>
+    <th>用途 / 审批意见</th><th style="width:150px">操作</th></tr>
+    ${rows.map(c => {
+      const [bg, cn] = CHG_STATE[c.status] || ['gray-bg', c.status];
+      const gate = c.gate_passed === 1 ? '<span class="state green-bg">通过</span>'
+        : (c.gate_passed === 0 ? '<span class="state red-bg">未过</span>' : '<span class="muted">未检</span>');
+      const note = c.review_note ? ` · 审批意见：${esc(c.review_note)}` : '';
+      return `<tr>
+      <td class="mono" style="font-size:11px">${esc(c.change_id)}</td><td>${esc(c.kind)}</td>
+      <td class="mono" style="font-size:11px">${esc(c.owner)}</td>
+      <td><span class="state ${bg}">${cn}</span></td>
+      <td class="mono" style="font-size:11px">${esc(c.published_version || '—')}</td>
+      <td>${gate}</td>
+      <td style="font-size:12px">${esc(c.purpose || '—')}${note}</td>
+      <td>${chgActions(c)}</td>
+    </tr>`; }).join('')}</table>`;
+  // 事件委托：按钮动态生成，逐个绑定会漏
+  document.querySelectorAll('#change-body button[data-act]').forEach(b => {
+    b.onclick = () => chgAct(b.dataset.act, b.dataset.id, b);
+  });
+}
+
+async function chgAct(act, id, btn) {
+  const label = { gate: '门槛检查', approve: '审批通过', reject: '驳回', publish: '发布', rollback: '回滚' }[act];
+  try {
+    if (act === 'gate') {
+      btn.disabled = true; btn.textContent = '检查中…';
+      const g = await api(`/internal/api/v1/changes/${id}/gate`, {method: 'POST'});
+      const lines = g.checks.map(c => `${c.ok ? '✅' : '❌'} ${c.name}：${c.detail}`).join('\n');
+      alert(`门槛${g.passed ? '通过' : '未通过'}（${g.scope_note}）\n\n${lines}`);
+    } else if (act === 'approve' || act === 'reject') {
+      const note = prompt(act === 'approve' ? '审批意见（可空）' : '驳回理由（可空）', '') ?? '';
+      await api(`/internal/api/v1/changes/${id}/review`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({decision: act === 'approve' ? 'APPROVE' : 'REJECT', note}),
+      });
+    } else if (act === 'publish') {
+      const r = await api(`/internal/api/v1/changes/${id}/publish`, {method: 'POST'});
+      alert(`已发布：${r.version}`);
+    } else if (act === 'rollback') {
+      const reason = prompt('回滚原因（必填，≥4 字）', '');
+      if (!reason) return;
+      const r = await api(`/internal/api/v1/changes/${id}/rollback`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason}),
+      });
+      alert(`已回滚：${r.rolled_back_version}`);
+    }
+  } catch (e) {
+    alert(`${label}失败：${e.message}`);
+  } finally {
+    if (btn) { btn.disabled = false; }
+    loadChanges();
+  }
+}
+
+/* ---------- 通知公告 ---------- */
+const LV_CN = {normal: ['gray-bg', '常规'], important: ['amber-bg', '重要'], urgent: ['red-bg', '紧急']};
+
+async function loadNotices() {
+  const d = await api('/internal/api/v1/notices/manage');
+  const rows = d.items || [];
+  $('#nt-list').innerHTML = rows.length ? `<table>
+    <tr><th style="width:130px">编号</th><th style="width:200px">标题</th><th>正文摘要</th>
+    <th style="width:60px">级别</th><th style="width:80px">发布人</th><th style="width:80px">已读</th>
+    <th style="width:140px">发布时间</th><th style="width:80px">状态</th><th style="width:70px">操作</th></tr>
+    ${rows.map(n => { const [bg, cn] = LV_CN[n.level] || LV_CN.normal; return `
+    <tr style="${n.revoked ? 'opacity:.5' : ''}">
+      <td class="mono" style="font-size:11px">${esc(n.notice_id)}</td>
+      <td>${esc(n.title)}</td>
+      <td style="font-size:12px;color:var(--ink2)">${esc(n.body.slice(0, 60))}${n.body.length > 60 ? '…' : ''}</td>
+      <td><span class="state ${bg}" style="color:var(--ink2)">${cn}</span></td>
+      <td>${esc(n.sender_name || '—')}</td>
+      <td>${n.read_count}/${rows.length ? '全员' : ''}</td>
+      <td class="mono" style="font-size:11px">${esc((n.created_at || '').replace('T', ' '))}</td>
+      <td>${n.revoked ? '<span class="state st-off">已撤回</span>' : '<span class="state st-on">生效中</span>'}</td>
+      <td>${n.revoked ? '' : `<button class="mini danger" data-nrv="${esc(n.notice_id)}">撤回</button>`}</td>
+    </tr>`; }).join('')}</table>` : '<div class="empty">尚未发布通知</div>';
+
+  document.querySelectorAll('[data-nrv]').forEach(b => b.onclick = async () => {
+    if (!confirm('撤回后全员端不再显示该通知，已读记录保留在历史中。确认撤回？')) return;
+    try { await api(`/internal/api/v1/notices/${b.dataset.nrv}/revoke`, {method: 'POST'}); loaded.delete('notices'); go('notices'); }
+    catch (e) { alert(e.message); }
+  });
+}
+
+$('#nt-pub').onclick = async () => {
+  const body = {title: $('#nt-title').value.trim(), body: $('#nt-body').value.trim(), level: $('#nt-level').value};
+  const msg = $('#nt-msg');
+  if (!body.title || !body.body) return msg.textContent = '标题与正文不能为空';
+  try {
+    const r = await api('/internal/api/v1/notices', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    msg.textContent = `已发布（编号 ${r.notice_id}），全员角标已刷新`;
+    msg.style.color = '#0f6e56';
+    $('#nt-title').value = ''; $('#nt-body').value = '';
+    loaded.delete('notices'); go('notices');
+  } catch (e) { msg.textContent = e.detail || e.message; msg.style.color = '#a32d2d'; }
+};
+
+/* ---------- 请假审批 ---------- */
+const LV_ST = {PENDING: ['st-lock', '待审批'], APPROVED: ['st-on', '已通过'], REJECTED: ['st-off', '已驳回']};
+
+async function loadLeaves() {
+  const rows = await api('/internal/api/v1/leaves/pending');
+  $('#lv-count').textContent = rows.length + ' 条待审批';
+  $('#lv-pending').innerHTML = rows.length ? `<table>
+    <tr><th style="width:120px">单号</th><th style="width:70px">申请人</th><th style="width:180px">起止</th>
+    <th>事由</th><th style="width:140px">提交时间</th><th style="width:190px">审批操作</th></tr>
+    ${rows.map(l => `
+    <tr>
+      <td class="mono">${esc(l.leave_id)}</td>
+      <td>${esc(l.applicant_name || l.emp_id)}</td>
+      <td class="mono" style="font-size:11px">${esc(l.start_date)} ~ ${esc(l.end_date)}</td>
+      <td style="font-size:12px">${esc(l.reason)}</td>
+      <td class="mono" style="font-size:11px">${esc((l.created_at || '').replace('T', ' '))}</td>
+      <td>
+        <button class="mini" data-lv="${esc(l.leave_id)}" data-act="APPROVED">通过</button>
+        <button class="mini danger" data-lv="${esc(l.leave_id)}" data-act="REJECTED">驳回</button>
+      </td>
+    </tr>`).join('')}</table>` : '<div class="empty">暂无待审批申请</div>';
+
+  document.querySelectorAll('[data-lv]').forEach(b => b.onclick = async () => {
+    const act = b.dataset.act;
+    const comment = prompt(`${act === 'APPROVED' ? '通过' : '驳回'} ${b.dataset.lv}，可填写审批意见（可留空）：`);
+    if (comment === null) return;
+    try {
+      await api(`/internal/api/v1/leaves/${b.dataset.lv}/review`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: act, comment})});
+      loaded.delete('leaves'); go('leaves');
+    } catch (e) { alert(e.message); }
+  });
+}
+
+/* ---------- 账号与会话 ---------- */
+async function loadAccounts() {
+  const users = await api('/internal/api/v1/users');
+  $('#user-body').innerHTML = `<table>
+    <tr><th style="width:80px">工号</th><th style="width:90px">姓名</th><th style="width:80px">账号</th>
+    <th style="width:95px">角色</th><th style="width:65px">端</th><th style="width:80px">状态</th>
+    <th style="width:150px">最近登录</th><th style="width:80px">失败次数</th><th>绑定设备</th><th style="width:190px">操作</th></tr>
+    ${users.map(u => {
+      const locked = u.locked_until && new Date(u.locked_until) > new Date();
+      const st = !u.active ? '<span class="state st-off">已停用</span>'
+        : locked ? '<span class="state st-lock">锁定中</span>'
+        : '<span class="state st-on">正常</span>';
+      const dev = u.device_id
+        ? `<span class="mono" style="font-size:11px">${esc(u.device_id.slice(0, 10))}…</span>`
+        : '<span class="muted">未绑定</span>';
+      return `<tr>
+        <td class="mono">${esc(u.emp_id)}</td><td>${esc(u.name || '—')}</td>
+        <td class="mono">${esc(u.username)}</td>
+        <td>${ROLE_CN[u.role] || esc(u.role)}</td>
+        <td>${u.portal === 'client' ? '坐席端' : '管理端'}</td>
+        <td>${st}</td>
+        <td class="mono" style="font-size:11px">${esc((u.last_login || '—').replace('T', ' '))}</td>
+        <td class="mono">${u.failed_n || 0}</td>
+        <td>${dev}</td>
+        <td>${u.emp_id === me.emp_id ? '<span class="muted">当前账号</span>' : `
+          <button class="mini" data-rst="${esc(u.emp_id)}">重置密码</button>
+          <button class="mini" data-mc="${esc(u.emp_id)}" data-on="${u.must_change_pwd ? 0 : 1}">${u.must_change_pwd ? '免首登改密' : '强制改密'}</button>
+          <button class="mini ${u.active ? 'danger' : ''}" data-emp="${esc(u.emp_id)}" data-on="${u.active ? 0 : 1}">${u.active ? '停用' : '启用'}</button>`}</td>
+      </tr>`;
+    }).join('')}</table>`;
+
+  document.querySelectorAll('[data-emp]').forEach(b => b.onclick = async () => {
+    if (b.dataset.on === '0' && !confirm(`确认停用 ${b.dataset.emp}？该账号所有在线会话将立即失效。`)) return;
+    try {
+      await api(`/internal/api/v1/users/${b.dataset.emp}/state`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({active: b.dataset.on === '1'}),
+      });
+      loaded.delete('accounts'); go('accounts');
+    } catch (e) { alert(e.message); }
+  });
+
+  document.querySelectorAll('[data-mc]').forEach(b => b.onclick = async () => {
+    const emp = b.dataset.mc, on = b.dataset.on === '1';
+    if (on && !confirm(`对 ${emp} 开启"首登强制改密"？该账号所有在线会话将立即失效，需重新登录并设置新口令。`)) return;
+    try {
+      await api(`/internal/api/v1/users/${emp}/must-change`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({enabled: on})});
+      loaded.delete('accounts'); go('accounts');
+    } catch (e) { alert(e.message); }
+  });
+
+  document.querySelectorAll('[data-rst]').forEach(b => b.onclick = async () => {
+    const emp = b.dataset.rst;
+    const pwd = prompt(`为 ${emp} 设置新口令（至少 8 位，须同时包含字母与数字）。设置后该账号所有会话立即失效，且须首登改密：`);
+    if (pwd === null) return;
+    try {
+      await api(`/internal/api/v1/users/${emp}/password`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({password: pwd}),
+      });
+      alert('口令已重置，旧会话全部失效。请将新口令私下告知本人。');
+    } catch (e) { alert(e.detail || e.message); }
+  });
+
+  $('#nu-create').onclick = async () => {
+    const body = {
+      emp_id: $('#nu-emp').value.trim(), name: $('#nu-name').value.trim(),
+      username: $('#nu-user').value.trim(), password: $('#nu-pwd').value,
+      role: $('#nu-role').value,
+    };
+    const msg = $('#nu-msg');
+    if (!body.emp_id || !body.name || !body.username || !body.password)
+      return msg.textContent = '请填写完整信息';
+    try {
+      const r = await api('/internal/api/v1/users', {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+      });
+      msg.textContent = `已创建 ${r.emp_id}（${r.portal === 'client' ? '坐席端' : '管理端'}入口）。请私下告知对方账号与口令。`;
+      $('#nu-pwd').value = '';
+      loaded.delete('accounts'); go('accounts');
+    } catch (e) { msg.textContent = e.detail || e.message; }
+  };
+
+  const sess = await api('/internal/api/v1/auth/sessions');
+  $('#sess-body').innerHTML = sess.length ? `<table>
+    <tr><th style="width:110px">会话</th><th style="width:80px">工号</th><th style="width:90px">姓名</th>
+    <th style="width:95px">角色</th><th style="width:65px">端</th><th style="width:150px">建立时间</th>
+    <th style="width:110px">来源</th><th style="width:110px">设备</th><th></th></tr>
+    ${sess.map(s => `<tr>
+      <td class="mono">${esc(s.sid)}</td><td class="mono">${esc(s.emp_id)}</td><td>${esc(s.name || '—')}</td>
+      <td>${ROLE_CN[s.role] || esc(s.role)}</td><td>${s.portal === 'client' ? '坐席端' : '管理端'}</td>
+      <td class="mono" style="font-size:11px">${esc((s.created_at || '').replace('T', ' '))}</td>
+      <td class="mono" style="font-size:11px">${esc(s.ip || '—')}</td>
+      <td class="mono" style="font-size:11px">${s.device_id ? esc(s.device_id.slice(0, 10)) + '…' : '浏览器'}</td>
+      <td><button class="mini danger" data-sid="${esc(s.sid)}">吊销</button></td>
+    </tr>`).join('')}</table>` : '<div class="empty">当前无在线会话</div>';
+
+  document.querySelectorAll('[data-sid]').forEach(b => b.onclick = async () => {
+    try {
+      await api(`/internal/api/v1/auth/sessions/${encodeURIComponent(b.dataset.sid)}/revoke`, {method: 'POST'});
+      loaded.delete('accounts'); go('accounts');
+    } catch (e) { alert(e.message); }
+  });
+}
+
+/* ---------- MCP ---------- */
+const DENIED = [
+  ['get_raw_customer_record', '原始客户档案查询 — 违反数据不出域'],
+  ['query_customer_account', '账户明细查询 — 生产数据访问'],
+  ['execute_sql', '任意 SQL — 放弃字段级管控'],
+  ['export_full_customer_dataset', '批量导出 — 无法审计用途'],
+  ['update_production_rule', '生产规则直写 — 绕过审批流水线'],
+  ['execute_refund_or_freeze', '业务动作 — 不得由 Agent 触发'],
+];
+
+async function loadMcp() {
+  const cat = await (await fetch(`${DMZ}/dmz/api/v1/mcp/catalog`)).json();
+  const allowed = cat.tools;
+  $('#mcp-list').innerHTML = allowed.map(t => `
+    <div class="mcp-row"><div><code>${t}</code><div class="why">白名单 · 按角色限权</div></div>
+    <span class="tag t-A">允许</span></div>`).join('')
+    + `<div style="padding:12px 0 6px;font-size:11.5px;color:var(--ink3);border-top:1px solid var(--line);margin-top:6px">注册表内不存在</div>`
+    + DENIED.map(([t, w]) => `<div class="mcp-row"><div><code style="color:var(--ink3);text-decoration:line-through">${t}</code><div class="why">${w}</div></div>
+    <span class="tag t-C">拒绝</span></div>`).join('');
+
+  $('#mcp-tool').innerHTML = allowed.map(t => `<option value="${t}">${t}</option>`).join('');
+  $('#mcp-role').value = `${me.name} / ${me.emp_id} / ${ROLE_CN[me.role] || me.role}`;
+}
+
+$('#mcp-run').onclick = async () => {
+  const tool = $('#mcp-tool').value;
+  let args = {};
+  try { args = JSON.parse($('#mcp-args').value || '{}'); } catch (e) {}
+  $('#mcp-state').textContent = '调用中…';
+  try {
+    const r = await fetch(`${API}/internal/api/v1/mcp/proxy`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, credentials: 'same-origin',
+      body: JSON.stringify({tool, args}),
+    });
+    const data = await r.json();
+    $('#mcp-state').textContent = r.ok ? `HTTP ${r.status} · 放行` : `HTTP ${r.status} · 拒绝`;
+    $('#mcp-out').textContent = JSON.stringify({status: r.status, tool, role: me.role, response: data}, null, 2);
+  } catch (e) {
+    $('#mcp-state').textContent = '调用失败';
+    $('#mcp-out').textContent = String(e);
+  }
+};
+
+/* ---------- 验收 ---------- */
+async function loadAcc() {
+  try {
+    const d = await api('/internal/api/v1/acceptance');
+    $('#acc-sum').textContent = `${d.passed}/${d.total} 通过`;
+    $('#acc-grid').innerHTML = d.items.map(it => `
+      <div class="acc ${it.status}">
+        <div class="h"><span class="id">${esc(it.id)}</span>
+        <span class="tag ${it.status === 'pass' ? 't-A' : 't-C'}">${it.status === 'pass' ? '通过' : '未通过'}</span></div>
+        <div class="nm">${esc(it.name)}</div>
+        <div class="ev">${esc(it.evidence || '')}</div>
+      </div>`).join('');
+  } catch (e) {
+    $('#acc-grid').innerHTML = '<div class="empty">尚未生成验收报告。请在项目根目录运行 <code>python -m pytest -q</code></div>';
+    $('#acc-sum').textContent = '无报告';
+  }
+}
+
+boot();
+</script>
+
+<footer class="footbar">
+  <div class="fin">
+    <div class="fl"><b>微光工作室 · 管理控制台</b><br>PoC 演示环境 · 客户与数据均为虚构 · 全部管理操作已入审计</div>
+    <div class="fr">内网可信域 / DMZ / 外网协同域 · © 2026</div>
+  </div>
+</footer>
+</body>
+</html>
