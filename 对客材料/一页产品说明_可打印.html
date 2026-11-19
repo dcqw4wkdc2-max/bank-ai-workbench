@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<title>银行客服 AI 工作台 · 产品说明</title>
+<style>
+@page{size:A4;margin:17mm 16mm}
+body{font-family:"宋体",serif;font-size:10.5pt;color:#111;line-height:1.65}
+h1{font-size:18pt;text-align:center;margin:0 0 2mm;letter-spacing:1px}
+.sub{text-align:center;font-size:9.5pt;color:#555;margin-bottom:6mm}
+h2{font-size:12pt;margin:6mm 0 2mm;border-left:3px solid #16243d;padding-left:7px}
+table{width:100%;border-collapse:collapse;margin:2mm 0 3mm}
+th,td{border:1px solid #888;padding:2mm 2.2mm;font-size:9.5pt;vertical-align:top}
+th{background:#f1f4f8;font-weight:normal}
+ol{margin:0 0 2mm 5mm;padding:0} li{margin-bottom:1.2mm}
+.tag{display:inline-block;background:#fff3cd;color:#8a6d3b;border-radius:8px;padding:1px 6px;font-size:9pt}
+.foot{margin-top:7mm;border-top:1px solid #ccc;padding-top:3mm;font-size:9pt;color:#444}
+</style></head><body>
+<h1>银行客服 AI 工作台</h1>
+<div class="sub">数据不出内网的客服 AI 辅助系统　<span class="tag">演示环境 · 合成数据</span></div>
+
+<h2>一、解决什么问题</h2>
+<p>客服想用 AI 提效，但客户数据一步都不能出内网，且每个结论都要能追到人。本系统把这条链路做成三段：<b>客户侧提交 → 内网脱敏 → 外网模型给建议 → 内网规则裁决 → 坐席人工确认 → 全链路审计</b>。适用于消费争议、交易查询、疑似未授权、待确认四类场景。</p>
+
+<h2>二、三段链路，各管一段</h2>
+<table>
+<tr><th style="width:38mm">区域</th><th>有什么</th><th style="width:52mm">没有什么</th></tr>
+<tr><td>内网可信域</td><td>客户原始数据、规则知识库、复原服务、审计</td><td>—</td></tr>
+<tr><td>安全交换区（DMZ）</td><td>字段白名单、内容复检、签名换发、工具网关</td><td>原始客户数据</td></tr>
+<tr><td>外网协同域</td><td>客户入口、模型调用出口</td><td>原始客户数据、复原能力</td></tr>
+</table>
+
+<h2>三、四个可现场验证的点</h2>
+<ol>
+<li><b>数据不出域</b>：出域报文里姓名、卡号、手机号原值命中 <b>0</b>，只有 <code>NAME_001</code> 这类令牌。</li>
+<li><b>AI 只建议不裁决</b>：疑似未授权、规则冲突、意图不明一律转人工（实测 4/4）。</li>
+<li><b>工具受控</b>：11 个白名单工具可用；6 个高危工具（任意 SQL、原始数据查询、生产规则直写）不存在，越权返回 403 并留审计。</li>
+<li><b>变更可管</b>：规则改动走"草稿 → 沙箱门禁 5 项 → 业务审批 → 安全审批 → 发布 → 回滚"，版本与审批链可查。</li>
+</ol>
+
+<h2>四、边界（请如实转达）</h2>
+<ol>
+<li>当前为<b>可运行原型</b>，非生产系统；全部数据为合成数据，不含任何真实客户资料。</li>
+<li>客服响应以"给建议 + 转人工"为主，<b>不代替人工做业务决定</b>。</li>
+<li>接入真实环境前需共同确认：数据分级与出域审批、可用模型端点、账号与审计留存要求、容量目标。</li>
+</ol>
+
+<h2>五、建议的下一步</h2>
+<ol>
+<li>选一个场景（建议消费争议受理）做 2 周小范围验证</li>
+<li>业务侧定 20–50 条规则 + 30 条以上脱敏案例</li>
+<li>完成一次安全评审（出域、权限、审计三项）</li>
+<li>按评审结论决定是否扩到其他意图</li>
+</ol>
+
+<div class="foot">
+演示环境：http://43.138.192.118:19092/　｜　项目组：杨慧敏（组长）· 梁晓志（技术） · 唐丽雯（业务）<br>
+本文件仅用于演示交流，不构成产品承诺。
+</div>
+</body></html>

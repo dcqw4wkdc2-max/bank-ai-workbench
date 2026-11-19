@@ -30,3 +30,11 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+# v2 运行产物与密钥
+.prov
+**/.prov
+*.pyc.bak
+# 临时/中间件
+*.tmp
+*.tgz
+data/

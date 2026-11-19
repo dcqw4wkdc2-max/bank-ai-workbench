@@ -1,0 +1,98 @@
+[
+ {
+  "rule_id": "R-DISPUTE-01",
+  "version": "v1.2",
+  "domain": "dispute",
+  "title": "争议受理渠道",
+  "summary": "争议须由客户通过 App「我的-交易争议」提交，需交易凭证与身份核验",
+  "full_text": "争议须由客户本人通过官方渠道提交申请，客服仅可指引路径，不得代为提交，不得承诺处理时限。",
+  "mandatory_human": 0,
+  "effective_from": "2026-09-01",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-DISPUTE-02",
+  "version": "v1.0",
+  "domain": "dispute",
+  "title": "争议材料清单",
+  "summary": "需提供交易时间、金额、商户与争议原因",
+  "full_text": "受理争议需采集：交易时间、交易金额、商户名称、争议原因、客户联系方式。材料不全时应先补齐。",
+  "mandatory_human": 0,
+  "effective_from": "2026-09-01",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-PENDING-01",
+  "version": "v1.0",
+  "domain": "routing",
+  "title": "意图不明确必须转人工",
+  "summary": "意图无法确定时不得由模型猜测",
+  "full_text": "当客户陈述不足以判定意图类别时，必须转人工，禁止模型自行归类后自动回复。",
+  "mandatory_human": 1,
+  "effective_from": "2026-10-01",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-PENDING-02",
+  "version": "v1.0",
+  "domain": "routing",
+  "title": "规则冲突处置",
+  "summary": "规则版本冲突时冻结自动回复",
+  "full_text": "出现规则版本冲突或渠道口径不一致时，冻结自动回复并转规则管理员确认。",
+  "mandatory_human": 0,
+  "effective_from": "2026-10-01",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-TXN-01",
+  "version": "v1.3",
+  "domain": "txn",
+  "title": "交易查询指引",
+  "summary": "指引客户在 App 交易明细中查询，不得朗读完整卡号",
+  "full_text": "交易信息查询应指引客户自助查看；确需口述核对时仅可提供卡号后四位。",
+  "mandatory_human": 0,
+  "effective_from": "2026-10-15",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-TXN-02",
+  "version": "v1.1",
+  "domain": "txn",
+  "title": "交易状态口径",
+  "summary": "交易状态以核心系统为准，客服不得自行判定入账",
+  "full_text": "任何交易状态结论必须以核心系统返回为准；对「待结算」不得表述为「已到账」。",
+  "mandatory_human": 0,
+  "effective_from": "2026-10-15",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-UNAUTH-01",
+  "version": "v2.0",
+  "domain": "risk",
+  "title": "疑似未授权强制人工",
+  "summary": "疑似未授权交易必须进入人工核查",
+  "full_text": "凡客户主张交易非本人授权的，一律转人工风控核查，禁止自动回复处理结论，禁止承诺赔付。",
+  "mandatory_human": 1,
+  "effective_from": "2026-11-01",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ },
+ {
+  "rule_id": "R-UNAUTH-02",
+  "version": "v1.4",
+  "domain": "risk",
+  "title": "疑似未授权处置顺序",
+  "summary": "先临时冻结，再转风控，不得承诺赔付",
+  "full_text": "处置顺序：①建议客户临时冻结卡片 ②转风控工单 ③告知后续核查流程。不得承诺具体赔付金额或时限。",
+  "mandatory_human": 0,
+  "effective_from": "2026-11-01",
+  "status": "active",
+  "source": "行内业务规则库（PoC 合成件，非生产规则）"
+ }
+]

@@ -92,7 +92,7 @@ def login_seat(base):
                                  data=json.dumps({"username": "b001", "password": "abc122333"}).encode())
     with urllib.request.urlopen(req, timeout=15) as r:
         ck = r.headers.get("set-cookie", "")
-    LOGIN["ck"] = re.match(r"(wb_sid=[^;]+)", ck).group(1)
+    LOGIN["ck"] = re.match(r"((?:wb_sid|vb_sid)=[^;]+)", ck).group(1)
 
 
 def worker(fn, base, start_idx, per_thread, barrier):

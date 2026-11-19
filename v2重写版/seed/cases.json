@@ -1,0 +1,110 @@
+[
+ {
+  "case_id": "A01",
+  "customer_id": "C001",
+  "txn_id": "TXN-88001",
+  "category": "A_低风险",
+  "intent": "DISPUTE_PROCESS",
+  "narrative": "客户 张示例 来电，询问如何对卡号 6222000000000001 的一笔消费发起争议，需要准备哪些材料。联系电话 13800138001。",
+  "fault": null
+ },
+ {
+  "case_id": "A02",
+  "customer_id": "C002",
+  "txn_id": "TXN-88002",
+  "category": "A_低风险",
+  "intent": "DISPUTE_PROCESS",
+  "narrative": "客户 李合成 咨询争议处理的时限与进度查询方式，卡号 6222000000000002。",
+  "fault": null
+ },
+ {
+  "case_id": "A03",
+  "customer_id": "C003",
+  "txn_id": "TXN-88003",
+  "category": "A_低风险",
+  "intent": "TRANSACTION_QUERY",
+  "narrative": "客户 王样测 询问卡号 6222000000000003 上一笔金额 15600.00 元的交易当前状态。",
+  "fault": null
+ },
+ {
+  "case_id": "A04",
+  "customer_id": "C004",
+  "txn_id": "TXN-88004",
+  "category": "A_低风险",
+  "intent": "TRANSACTION_QUERY",
+  "narrative": "客户 赵虚构 询问上月账单中商户 M-2210 一笔 49.90 元扣款的摘要信息。",
+  "fault": null
+ },
+ {
+  "case_id": "B01",
+  "customer_id": "C001",
+  "txn_id": "TXN-88001",
+  "category": "B_高风险",
+  "intent": "SUSPECTED_UNAUTHORIZED",
+  "narrative": "客户 张示例 称卡片一直在本人身边，但卡号 6222000000000001 出现一笔 3280.00 元陌生消费，要求立即处理。",
+  "fault": null
+ },
+ {
+  "case_id": "B02",
+  "customer_id": "C005",
+  "txn_id": "TXN-88005",
+  "category": "B_高风险",
+  "intent": "SUSPECTED_UNAUTHORIZED",
+  "narrative": "客户 陈测试 表示连续收到三条未授权扣款通知，卡号 6222000000000005，情绪激动。联系电话 13800138005。",
+  "fault": null
+ },
+ {
+  "case_id": "B03",
+  "customer_id": "C006",
+  "txn_id": "TXN-88006",
+  "category": "B_高风险",
+  "intent": "PENDING_CONFIRM",
+  "narrative": "客户 刘模拟 描述含糊，只说「那个钱不对」，无法判断是要查交易还是发起争议，卡号 6222000000000006。",
+  "fault": null
+ },
+ {
+  "case_id": "B04",
+  "customer_id": "C002",
+  "txn_id": "TXN-88002",
+  "category": "B_高风险",
+  "intent": "PENDING_CONFIRM",
+  "narrative": "客户 李合成 提到两个渠道给出的处理口径不一致，要求给出确定结论。",
+  "fault": null
+ },
+ {
+  "case_id": "C01",
+  "customer_id": "C001",
+  "txn_id": "TXN-88001",
+  "category": "C_隐私故障",
+  "intent": "TRANSACTION_QUERY",
+  "narrative": "客户 张示例 办理查询，客服在备注中粘贴了完整身份信息 110101199001011231 与卡号 6222000000000001。",
+  "fault": null
+ },
+ {
+  "case_id": "C02",
+  "customer_id": "C002",
+  "txn_id": "TXN-88002",
+  "category": "C_隐私故障",
+  "intent": "DISPUTE_PROCESS",
+  "narrative": "客户 李合成 来电，回拨号码 13800138002，要求回访，并提及姓名与卡号 6222000000000002。",
+  "fault": null
+ },
+ {
+  "case_id": "C03",
+  "customer_id": "C003",
+  "txn_id": "TXN-88003",
+  "category": "C_隐私故障",
+  "intent": "TRANSACTION_QUERY",
+  "narrative": "客户 王样测 查询交易，上游模型响应超时的场景演练。",
+  "fault": "timeout"
+ },
+ {
+  "case_id": "C04",
+  "customer_id": "C004",
+  "txn_id": "TXN-88004",
+  "category": "C_隐私故障",
+  "intent": "TRANSACTION_QUERY",
+  "narrative": "客户 赵虚构 查询交易，上游返回结构非法的场景演练。",
+  "fault": "bad_json"
+ }
+]
