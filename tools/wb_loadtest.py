@@ -22,16 +22,26 @@ TEXTS = [
 ]
 
 
+BASIC = ""
+
+
+def _auth(h):
+    if BASIC:
+        import base64
+        h["Authorization"] = "Basic " + base64.b64encode(BASIC.encode()).decode()
+    return h
+
+
 def post_json(url, payload, timeout=120):
     req = urllib.request.Request(url, method="POST",
-                                 headers={"Content-Type": "application/json"},
+                                 headers=_auth({"Content-Type": "application/json"}),
                                  data=json.dumps(payload).encode())
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, r.read().decode("utf-8", "replace")
 
 
 def get_json(url, timeout=30):
-    req = urllib.request.Request(url)
+    req = urllib.request.Request(url, headers=_auth({}))
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, r.read().decode("utf-8", "replace")
 
@@ -60,7 +70,7 @@ def one_case(base, idx):
     try:
         ck = LOGIN["ck"]
         req = urllib.request.Request(base + "/internal/api/v1/cases", method="POST",
-                                     headers={"Content-Type": "application/json", "Cookie": ck},
+                                     headers=_auth({"Content-Type": "application/json", "Cookie": ck}),
                                      data=json.dumps({"case_id": random.choice(["A01", "A03", "B01", "B03"]),
                                                       "emp_id": "B001"}).encode())
         with urllib.request.urlopen(req, timeout=120) as r:
@@ -78,7 +88,7 @@ LOGIN = {}
 def login_seat(base):
     import re
     req = urllib.request.Request(base + "/internal/api/v1/auth/login", method="POST",
-                                 headers={"Content-Type": "application/json"},
+                                 headers=_auth({"Content-Type": "application/json"}),
                                  data=json.dumps({"username": "b001", "password": "abc122333"}).encode())
     with urllib.request.urlopen(req, timeout=15) as r:
         ck = r.headers.get("set-cookie", "")
@@ -119,9 +129,12 @@ def main():
     ap.add_argument("--path", choices=["customer", "case"], default="customer")
     ap.add_argument("--n", type=int, default=40)
     ap.add_argument("--c", type=int, default=8)
+    ap.add_argument("--basic", default="", help="Basic 认证 user:pass，用于经 nginx 的实例")
     ap.add_argument("--out", default="loadtest_result.json")
     a = ap.parse_args()
 
+    global BASIC
+    BASIC = a.basic
     base = a.base.rstrip("/")
     fn = one_customer if a.path == "customer" else one_case
     if a.path == "case":

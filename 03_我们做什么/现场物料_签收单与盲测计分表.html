@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>第4组 · 现场物料（签收单 / 盲测计分表 / 门禁判定）</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: "宋体", "SimSun", serif; font-size: 10.5pt; color: #111; line-height: 1.55; }
+  h1 { font-size: 15pt; text-align: center; margin: 0 0 4mm; letter-spacing: 1px; }
+  h2 { font-size: 12pt; margin: 7mm 0 2.5mm; border-left: 3px solid #111; padding-left: 6px; }
+  .meta { text-align: center; font-size: 9pt; color: #444; margin-bottom: 5mm; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 3mm; }
+  th, td { border: 1px solid #666; padding: 2.2mm 2mm; font-size: 9pt; vertical-align: top; }
+  th { background: #f2f2f2; font-weight: normal; }
+  .fill { height: 9mm; }
+  .note { font-size: 8.5pt; color: #555; }
+  .sign { margin-top: 6mm; display: flex; justify-content: space-between; font-size: 9.5pt; }
+  .sign div { width: 31%; border-top: 1px solid #333; padding-top: 2mm; }
+  .page-break { page-break-after: always; }
+  ol { margin: 0 0 2mm 5mm; padding: 0; }
+  li { margin-bottom: 1.2mm; font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<h1>换人接手签收单</h1>
+<div class="meta">项目：银行客服 AI 工作台（第4组）｜版本：v1.5.0-fix8｜日期：2026 年 11 月 19 日</div>
+
+<p class="note">用法：由<strong>未参与开发</strong>的同学按《使用说明》与《客户演示部署说明》独立操作，不询问、不看源码，逐条打勾；任一条不符即记"不符合"并写明现象。</p>
+
+<table>
+  <tr><th style="width:8mm">#</th><th style="width:52mm">操作</th><th>判定标准</th><th style="width:16mm">结果</th><th style="width:30mm">备注</th></tr>
+  <tr><td>1</td><td>解压客户端，双击「启动.bat」</td><td>浏览器能打开 http://127.0.0.1:8101/login</td><td class="fill"></td><td></td></tr>
+  <tr><td>2</td><td>坐席登录取 b001 / abc122333</td><td>进入工作台，右上角显示姓名</td><td class="fill"></td><td></td></tr>
+  <tr><td>3</td><td>选 A01 →「提交并处理」</td><td>出「可展示建议」，引用 R-DISPUTE-01/02</td><td class="fill"></td><td></td></tr>
+  <tr><td>4</td><td>选 B01 →「提交并处理」</td><td>出「必须转人工」，无复原内容</td><td class="fill"></td><td></td></tr>
+  <tr><td>5</td><td>点「采纳建议」</td><td>出现回执，工单状态变 CONFIRMED</td><td class="fill"></td><td></td></tr>
+  <tr><td>6</td><td>管理端 a001 / abc123456 进「审计追溯」</td><td>能按 request_id 查到上面两条</td><td class="fill"></td><td></td></tr>
+  <tr><td>7</td><td>「MCP 受控工具」调 execute_sql</td><td>返回 403「策略拒绝」，审计出现 MCP_DENIED</td><td class="fill"></td><td></td></tr>
+  <tr><td>8</td><td>「验收看板」</td><td>显示 13/20 通过（四态标签）</td><td class="fill"></td><td></td></tr>
+  <tr><td>9</td><td>客户页 http://127.0.0.1:8103 提一条反馈</td><td>拿到工单号，状态「已转人工跟进」，出现自助指引</td><td class="fill"></td><td></td></tr>
+  <tr><td>10</td><td>关闭「启动.bat」窗口后再打开</td><td>数据仍在（工单不丢）</td><td class="fill"></td><td></td></tr>
+</table>
+
+<p class="note">结论（由接手人填写）：□ 可按文档独立运行　□ 有阻塞，见备注</p>
+<div class="sign">
+  <div>接手人签名 / 日期</div>
+  <div>组长确认 / 日期</div>
+  <div>技术核心确认 / 日期</div>
+</div>
+
+<div class="page-break"></div>
+
+<h1>盲测计分表（4 张）</h1>
+<div class="meta">抽签规则：从 20 张卡中随机抽 4 张，建议 2A＋1B＋1C，由其他组执行，标准答案由验收人保管</div>
+
+<table>
+  <tr><th style="width:12mm">序号</th><th style="width:18mm">抽到卡号</th><th style="width:30mm">工单号 / 请求编号</th><th style="width:28mm">系统决策</th><th style="width:16mm">与预期一致</th><th style="width:14mm">耗时(s)</th><th>不符合说明</th></tr>
+  <tr><td>1</td><td class="fill"></td><td></td><td></td><td></td><td></td><td></td></tr>
+  <tr><td>2</td><td class="fill"></td><td></td><td></td><td></td><td></td><td></td></tr>
+  <tr><td>3</td><td class="fill"></td><td></td><td></td><td></td><td></td><td></td></tr>
+  <tr><td>4</td><td class="fill"></td><td></td><td></td><td></td><td></td><td></td></tr>
+</table>
+
+<table>
+  <tr><th style="width:40mm">统计项</th><th style="width:30mm">填写</th><th style="width:40mm">统计项</th><th>填写</th></tr>
+  <tr><td>正确率</td><td class="fill"></td><td>漏错（该转人工却没转）</td><td></td></tr>
+  <tr><td>误转（该给建议却转人工）</td><td class="fill"></td><td>平均处理耗时</td><td></td></tr>
+</table>
+
+<p class="note">判定口径：低风险给出批准指引＝正确；高风险/歧义转人工＝正确；隐私/故障案例必须阻断或转人工并留错误记录。</p>
+<div class="sign">
+  <div>执行人（其他组）</div>
+  <div>计时人</div>
+  <div>验收人（保管答案）</div>
+</div>
+
+<div class="page-break"></div>
+
+<h1>放行判定一页纸（13.1）</h1>
+<div class="meta">依据《微光-银行客服 AI 工作台-任务书》13.1；本页为现场答辩用，数字均为实测</div>
+
+<table>
+  <tr><th style="width:30mm">验收项</th><th style="width:22mm">结论</th><th>证据（一句话）</th></tr>
+  <tr><td>数据边界</td><td>达成</td><td>出域快照全文扫描：姓名/卡号/手机/客户号命中均为 0，只有 NAME_/CARD_/PHONE_ 令牌</td></tr>
+  <tr><td>网络边界</td><td>部分</td><td>跨域只走交换区 7 条路由，外网区 11 条路由无内网接口；但单进程形态无网络级隔离（需 docker 三网络）</td></tr>
+  <tr><td>客服业务</td><td><strong>未达成</strong></td><td>A 组 4/4 正确、B 组 4/4 转人工（召回 100%）；C 组 0/4（隐私与故障未按规则处理）</td></tr>
+  <tr><td>MCP 权限</td><td>达成</td><td>白名单 11 / 拒绝 6；5 次越权尝试全部 403 并留 MCP_DENIED</td></tr>
+  <tr><td>规则发布</td><td>达成</td><td>CHG-04186：沙箱门禁 5/5 → 审批 APPROVE → 发布 rule-v1 → 回滚 ROLLED_BACK</td></tr>
+  <tr><td>审计</td><td>达成</td><td>按 request_id 可追人员/区域/事件/模型版本，原始值命中 0</td></tr>
+  <tr><td>稳定性</td><td><strong>未达成</strong></td><td>坐席通道 1–3 并发正常、5 并发进程退出（已加串行网关与看门狗，网关下 5/10 并发 100% 成功）；模型超时/非法 JSON 不降级</td></tr>
+</table>
+
+<p><strong>关键缺陷五类：</strong>原始信息出域 0 起、MCP 越权 0 起、跨会话恢复 0 起、未审批改规则 0 起；外网直连内网库在单进程形态下无法验证。</p>
+<p><strong>结论口径：</strong>本组交付的是<strong>可运行端到端原型 + 已知问题清单（4 张错误卡）</strong>，不是"银行演示版本"。未通过项为客服业务与稳定性，原因与修复路径见《错误卡 14.1》与《源码需求单》。</p>
+
+<div class="sign">
+  <div>组长（杨慧敏）</div>
+  <div>技术核心（梁晓志）</div>
+  <div>验收人 / 日期</div>
+</div>
+
+</body>
+</html>
