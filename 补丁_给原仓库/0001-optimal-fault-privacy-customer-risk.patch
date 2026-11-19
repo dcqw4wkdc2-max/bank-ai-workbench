@@ -1,8 +1,50 @@
 diff --git a/inner/app.py b/inner/app.py
-index ea5700e..ad73cf9 100644
+index ea5700e..6b09edc 100644
 --- a/inner/app.py
 +++ b/inner/app.py
-@@ -1253,7 +1253,13 @@ def fb_ingest_ep(req: FeedbackIngestRequest, request: Request) -> dict:
+@@ -1072,6 +1072,21 @@ _FB_INTERNAL_RE = re.compile(
+     r"COLLECT_MORE|intent_summary|risk_flags|next_step|Agent|智能体|规则引擎|模型", re.I)
+ 
+ 
++def _fb_intent_hint(body: str) -> str | None:
++    """客户通道的确定性意图提示（v1.5.1）。
++
++    模型（尤其 mock/降级）常只给通用动作码 GUIDE_APP_QUERY，导致"想提争议要准备
++    什么材料"这种低风险咨询也只得到一句通用自助话术。这里按关键词给更具体的动作码，
++    仅当模型没给更具体动作时生效（模型优先）。
++    """
++    text = body or ""
++    if re.search(r"争议|申诉|材料|怎么提|投诉|举证", text):
++        return "REQUEST_DISPUTE_FORM"
++    if re.search(r"不清楚|不知道|那个钱|不对|看不懂", text):
++        return "COLLECT_MORE_INFO"
++    return None
++
++
+ def _fb_template_reply(category: str, step: str, first: bool,
+                        missing: list | None = None) -> str:
+     """模板兜底：按业务类型给足信息量；追问只围绕本次问题且不超过 2 项。"""
+@@ -1131,11 +1146,17 @@ def _fb_compose_reply(category: str, body: str, history: list[dict] | None = Non
+         meta["reply_source"] = "template-fallback"
+     if meta.get("next_step") not in _FB_STEP_CN:
+         meta["next_step"] = "GUIDE_APP_QUERY"
++    # v1.5.1：模型只给通用动作码时，用确定性意图提示补更具体的动作（模型优先）
++    _hint = _fb_intent_hint(body)
++    if _hint and meta.get("next_step") == "GUIDE_APP_QUERY":
++        meta["next_step"] = _hint
++        meta["intent_hint"] = _hint
+     step = meta["next_step"]
+ 
+-    # 客户答复：优先用模型产出的客户话术；不合格则降级改进后的模板口径
++    # 客户答复：优先用模型产出的客户话术；命中意图提示时改用对应模板（保证动作码与话术一致）
+     reply = ""
+-    if customer_reply and len(customer_reply) <= 300 and not _FB_INTERNAL_RE.search(customer_reply):
++    if (customer_reply and not meta.get("intent_hint")
++            and len(customer_reply) <= 300 and not _FB_INTERNAL_RE.search(customer_reply)):
+         reply = customer_reply
+         meta["reply_source"] = "model"
+     else:
+@@ -1253,7 +1274,13 @@ def fb_ingest_ep(req: FeedbackIngestRequest, request: Request) -> dict:
      # 模型可能漏判（冒烟实测），资金安全宁可错转也不可漏转。
      # 按导师意见：转人工的同时仍下发一条安抚答复（谨慎处理策略），
      # 客户不再是干巳巳的「已受理待人工接管」，而是有人味儿的即时回应。
@@ -155,6 +197,57 @@ index 0000000..e1d40bd
 +    d = _run_case(urls, "A01")
 +    assert d["status"] == "RESTORED"
 +    assert d["decision"] == "SHOW_SUGGESTION"
+diff --git a/tests/test_fb_reply_intent.py b/tests/test_fb_reply_intent.py
+new file mode 100644
+index 0000000..48842e3
+--- /dev/null
++++ b/tests/test_fb_reply_intent.py
+@@ -0,0 +1,45 @@
++"""客户通道答复分流的单元测试（v1.5.1）
++
++覆盖三件事：
++  1. 低风险"提争议" → 给交易争议入口的具体话术（不再是通用自助话术）
++  2. 信息不足"看不懂" → 追问缺失信息
++  3. 话术里不得出现内部术语（动作码/意图摘要/JSON 等）
++
++只测纯函数，不起服务。高风险关键词分流在 inner/app.py 的 fb_ingest 里，
++由 test_acceptance 的客户反馈用例覆盖。
++"""
++from __future__ import annotations
++
++from inner.app import _fb_compose_reply, _fb_intent_hint
++
++
++def test_intent_hint_dispute():
++    assert _fb_intent_hint("想对一笔 268 元消费提争议，需要准备什么材料？") == "REQUEST_DISPUTE_FORM"
++
++
++def test_intent_hint_unclear():
++    assert _fb_intent_hint("账单里有一笔 39.9 元扣款我看不懂") == "COLLECT_MORE_INFO"
++
++
++def test_intent_hint_none_for_generic():
++    assert _fb_intent_hint("想问信用卡年费在哪看") is None
++
++
++def test_dispute_reply_mentions_dispute_entry():
++    reply, meta = _fb_compose_reply("ACCOUNT", "想对一笔 268 元消费提争议，需要准备什么材料？")
++    assert meta.get("next_step") == "REQUEST_DISPUTE_FORM"
++    assert "交易争议" in reply
++    assert reply.strip(), "答复不得为空"
++
++
++def test_unclear_reply_asks_for_detail():
++    reply, meta = _fb_compose_reply("ACCOUNT", "账单里有一笔 39.9 元扣款我看不懂")
++    assert meta.get("next_step") == "COLLECT_MORE_INFO"
++    assert "补充" in reply
++
++
++def test_reply_has_no_internal_terms():
++    for body in ("想对一笔 268 元消费提争议，需要准备什么材料？", "账单里有一笔 39.9 元扣款我看不懂"):
++        reply, _ = _fb_compose_reply("ACCOUNT", body)
++        for bad in ("动作码", "意图摘要", "risk_flags", "next_step", "JSON", "HUMAN_REVIEW"):
++            assert bad not in reply, f"答复出现内部术语：{bad}"
 diff --git a/tests/test_privacy_judge.py b/tests/test_privacy_judge.py
 new file mode 100644
 index 0000000..bd4bc31
