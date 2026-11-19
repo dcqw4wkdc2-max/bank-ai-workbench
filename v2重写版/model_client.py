@@ -21,8 +21,10 @@ CFG = {
     "base": (os.getenv("MODEL_BASE_URL") or "").rstrip("/"),
     "key": os.getenv("MODEL_API_KEY") or "",
     "model": os.getenv("MODEL_NAME") or "",
-    "timeout": float(os.getenv("MODEL_TIMEOUT") or 8),
+    "timeout": float(os.getenv("MODEL_TIMEOUT") or 45),
 }
+
+STATS = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0}
 
 ALLOWED_OUTPUT = {"intent_summary", "recommended_next_step", "missing_information", "risk_flags", "source_rule_ids"}
 
@@ -65,6 +67,7 @@ def complete(sanitized_context: str, rules: list, intent_hint: str, timeout: flo
         "model": CFG["model"],
         "temperature": 0,
         "max_tokens": 400,
+        "reasoning_effort": os.getenv("MODEL_REASONING", "none"),
         "messages": [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": "意图提示：%s\n规则：%s\n脱敏上下文：%s" % (
@@ -79,22 +82,45 @@ def complete(sanitized_context: str, rules: list, intent_hint: str, timeout: flo
                  "Authorization": "Bearer " + (CFG["key"] or "none")},
         data=json.dumps(payload).encode())
     t0 = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            raise ModelUnavailable("模型端点拒绝访问（%d）" % e.code)
-        raise ModelSchemaError("模型 HTTP %d" % e.code)
-    except Exception as e:
+    raw = None
+    last_err = None
+    for attempt in (1, 2):  # 只读调用，超时/5xx 允许重试一次
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", "replace")
+            break
+        except urllib.error.HTTPError as e:
+            last_err = e
+            if e.code >= 500 and attempt == 1:
+                time.sleep(1); continue
+            break
+        except Exception as e:
+            last_err = e
+            if attempt == 1:
+                time.sleep(1); continue
+            break
+    if raw is None:
+        e = last_err
+        if isinstance(e, urllib.error.HTTPError):
+            if e.code in (401, 403):
+                raise ModelUnavailable("模型端点拒绝访问（%d）" % e.code)
+            raise ModelSchemaError("模型 HTTP %d" % e.code)
         msg = str(e).lower()
         if "timed out" in msg or "timeout" in msg:
-            raise ModelTimeout("模型超时（%.1fs）" % (time.time() - t0))
+            raise ModelTimeout("模型超时（两次尝试，%.1fs）" % (time.time() - t0))
         raise ModelUnavailable("模型不可达：%s" % str(e)[:60])
 
     try:
         data = json.loads(raw)
-        content = data["choices"][0]["message"]["content"]
+        msg = data["choices"][0]["message"]
+        content = msg.get("content") or ""
+        if not content.strip() and msg.get("reasoning_content"):
+            content = msg["reasoning_content"]
+        u = data.get("usage") or {}
+        STATS["calls"] += 1
+        STATS["prompt_tokens"] += int(u.get("prompt_tokens") or 0)
+        STATS["completion_tokens"] += int(u.get("completion_tokens") or 0)
+        STATS["reasoning_tokens"] += int((u.get("completion_tokens_details") or {}).get("reasoning_tokens") or 0)
     except Exception:
         raise ModelSchemaError("响应结构非法（缺 choices/message）")
 
@@ -117,6 +143,9 @@ def complete(sanitized_context: str, rules: list, intent_hint: str, timeout: flo
         "source_rule_ids": cited,
         "_model": CFG["model"],
         "_latency": round(time.time() - t0, 2),
+        "_usage": {"prompt": int(u.get("prompt_tokens") or 0),
+                   "completion": int(u.get("completion_tokens") or 0),
+                   "reasoning": int((u.get("completion_tokens_details") or {}).get("reasoning_tokens") or 0)},
     }
     if not out["intent_summary"]:
         raise ModelSchemaError("缺少 intent_summary")
@@ -135,3 +164,7 @@ def render(model_out: dict, fallback_text: str = "") -> str:
     if not lines[1:] and fallback_text:
         return fallback_text
     return "\n".join(lines)
+
+
+def stats() -> dict:
+    return dict(STATS)

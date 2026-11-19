@@ -86,3 +86,23 @@ python app.py --port 18201
 | 端点不可达 | 关闭的端口 | 回落模板，`model_version=template-v2(fallback)`，业务不中断 |
 
 原客户端的模型配置也扒出来了（`common/config.pyc`）：`HERMES_BASE_URL=http://106.55.2.189:8000/v1`、`HERMES_MODEL=Qwen3.5-9B-AWQ`，但**key 是占位符**（base64 解出来是 `your-secret-key-here`），实测返回 401。所以要用真模型，需要真实 key。
+
+
+### 真模型实测（2026-11-19 19:55，用 Hermes 里的中转 key）
+
+配置：`https://yyxuetang.com/v1` + `DeepSeek-V4.1-Flash`，`reasoning_effort=none`（关掉思考，省 token），超时 45 秒、超时/5xx 重试一次。
+
+| 项 | 结果 |
+|---|---|
+| 12 例逐案 | **12/12 符合**（A01–A04 走真模型出建议，B/C 组仍走规则与判据） |
+| A01 建议文本 | 「客户咨询对指定卡号一笔消费发起争议的流程及所需材料 / 动作 REQUEST_DISPUTE_FORM / 待补充 交易时间、金额、商户 / 引用 R-DISPUTE-01、R-DISPUTE-02」 |
+| A04 | 首轮曾因中转抖动 30.8 秒超时 → 触发 TIMEOUT 降级（说明 fail-closed 真的在工作）；把超时提到 45 秒并加重试后恢复通过 |
+| 动作码白名单 | 模型第一次把「争议」判成 `GUIDE_APP_QUERY`，被白名单纠正为 `REQUEST_DISPUTE_FORM`——**AI 不能越权给动作** |
+| 真实 token | 6 次调用：prompt 1,124 + completion 542 = **1,666 tokens**（含我几次探活），按 DeepSeek 官方价折算 **不到 1 分钱** |
+| 单次耗时 | 1.6–2.2 秒 |
+
+### 需要注意
+
+- 中转站价格与 DeepSeek 官方不同，实际账单以 `yyxuetang.com` 后台为准；这次用量小到可以忽略。
+- 思考模型必须 `reasoning_effort=none`，否则内容跑到 `reasoning_content`、`content` 为空（原客户端 `agent.pyc` 的注释也写了这一点）。
+- 服务器上目前**没有放 key**，跑的是模板模式；要开模型，把 `.prov`（base/key/model）放上去后 `python run_model.py --port 18201` 即可。

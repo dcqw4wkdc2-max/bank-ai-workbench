@@ -25,6 +25,11 @@ from fastapi import FastAPI, Request, Response, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse, PlainTextResponse
 from pydantic import BaseModel
 
+try:
+    import model_client
+except Exception:  # 允许缺省（离线模板模式）
+    model_client = None
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "data")
 os.makedirs(DATA, exist_ok=True)
@@ -134,6 +139,13 @@ def privacy_judge(text: str, note: str = ""):
     return "", "", ""
 
 
+EXPECT_ACTION = {
+    "DISPUTE_PROCESS": "REQUEST_DISPUTE_FORM",
+    "TRANSACTION_QUERY": "GUIDE_APP_QUERY",
+    "SUSPECTED_UNAUTHORIZED": "HUMAN_HANDOFF",
+    "PENDING_CONFIRM": "HUMAN_HANDOFF",
+}
+
 INTENT_RULES = {
     "DISPUTE_PROCESS": ["R-DISPUTE-01", "R-DISPUTE-02"],
     "TRANSACTION_QUERY": ["R-TXN-01", "R-TXN-02"],
@@ -214,9 +226,34 @@ def adjudicate(case: Dict[str, Any], note: str = "", fault: Optional[str] = None
         return dict(status="HUMAN_HANDOFF", decision="HUMAN_HANDOFF", intent=intent,
                     rule_ids=rules, reason_codes=["MANDATORY_HUMAN"], error_card=None, text="")
 
-    # 4) 低风险 → 给建议（复原由 /restore 在进入该分支后执行）
+    # 4) 低风险 → 先问模型（若已配置），模型只出建议，裁决仍是规则
+    base_text = TEMPLATES.get(intent, "")
+    supplier, version, text = "internal-llm", "template-v2", base_text
+    if model_client is not None and model_client.available():
+        try:
+            mo = model_client.complete(tokenize(narrative), [RULE_BY_ID[r] for r in rules if r in RULE_BY_ID], intent)
+            # 动作码白名单：模型给的动作必须与意图匹配，否则以规则为准（AI 不建议越权动作）
+            want = EXPECT_ACTION.get(intent)
+            if want and mo.get("recommended_next_step") and mo["recommended_next_step"] != want:
+                mo["_action_corrected"] = mo["recommended_next_step"]
+                mo["recommended_next_step"] = want
+            text = model_client.render(mo, base_text)
+            version = mo.get("_model", "model")
+        except model_client.ModelTimeout:
+            return dict(status="TIMEOUT", decision="HUMAN_HANDOFF", intent=intent, rule_ids=rules,
+                        reason_codes=["MODEL_TIMEOUT", "FAIL_CLOSED_HUMAN"],
+                        error_card={"code": "EC-TIMEOUT", "msg": "上游模型超时，已安全降级为人工处理"},
+                        text="", model_supplier=supplier, model_version=version)
+        except model_client.ModelSchemaError as e:
+            return dict(status="REJECTED", decision="HUMAN_HANDOFF", intent=intent, rule_ids=rules,
+                        reason_codes=["MODEL_INVALID_JSON", "SCHEMA_VALIDATION_FAILED"],
+                        error_card={"code": "EC-BADJSON", "msg": "上游返回结构非法，已阻断自动回复并转人工"},
+                        text="", model_supplier=supplier, model_version=version)
+        except Exception:
+            version = "template-v2(fallback)"
     return dict(status="RESTORED", decision="SHOW_SUGGESTION", intent=intent,
-                rule_ids=rules, reason_codes=[], error_card=None, text=TEMPLATES.get(intent, ""))
+                rule_ids=rules, reason_codes=[], error_card=None, text=text,
+                model_supplier=supplier, model_version=version)
 
 
 def outbound_snapshot(request_id: str, case: Dict[str, Any], intent: str, rules: List[str]) -> Dict[str, Any]:
@@ -377,7 +414,8 @@ def create_app() -> FastAPI:
                    rule_ids=json.dumps(verdict["rule_ids"], ensure_ascii=False),
                    outbound_snapshot=json.dumps(snap, ensure_ascii=False), restored_text=restored,
                    error_card=json.dumps(verdict["error_card"], ensure_ascii=False) if verdict["error_card"] else "",
-                   model_supplier="internal-llm", model_version="template-v2",
+                   model_supplier=verdict.get("model_supplier", "internal-llm"),
+                   model_version=verdict.get("model_version", "template-v2"),
                    created_at=now_iso(True), updated_at=now_iso(True))
         with LOCK:
             con = db()
@@ -583,6 +621,13 @@ def create_app() -> FastAPI:
 
     # ---------- 规则 / 审计 / 观测 / 看板 ----------
     if ZONE == "inner":
+        @app.get("/internal/api/v1/debug/model")
+        def debug_model(request: Request):
+            require(request)
+            if model_client is None:
+                return {"import": "failed", "available": False}
+            return {"import": "ok", **model_client.info(), "stats": model_client.stats()}
+
         @app.get("/internal/api/v1/rules")
         def rules(request: Request):
             require(request)
