@@ -14,10 +14,12 @@
 
 坐席/管理端改用 http://127.0.0.1:8121/login（页面与接口都由网关透传）。
 """
-import argparse, http.server, json, socketserver, threading, time, urllib.error, urllib.request
+import argparse, http.server, json, os, socketserver, subprocess, threading, time, urllib.error, urllib.request
 
 LOCK = threading.Lock()
-STATS = {"served": 0, "queued": 0, "retried": 0, "max_wait_sec": 0.0, "errors": 0}
+STATS = {"served": 0, "queued": 0, "retried": 0, "max_wait_sec": 0.0, "errors": 0, "restarts": 0}
+AUTO = {"exe": "", "cwd": "", "last": 0.0}
+LAST_OK = {"t": time.time()}
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -89,6 +91,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
     do_GET = do_POST = do_PUT = do_DELETE = do_PATCH = _forward
 
 
+def health_loop():
+    """每 8 秒探一次后端；连续 2 次不可达且距上次拉起 >30 秒，就重启客户端。"""
+    dead = 0
+    probe = Handler.target + "/internal/api/v1/health"
+    while True:
+        time.sleep(8)
+        try:
+            with urllib.request.urlopen(probe, timeout=4) as r:
+                if r.status == 200:
+                    dead = 0
+                    LAST_OK["t"] = time.time()
+                    continue
+            dead += 1
+        except Exception:
+            dead += 1
+        if dead >= 2 and AUTO["exe"] and (time.time() - AUTO["last"] > 30):
+            AUTO["last"] = time.time()
+            STATS["restarts"] += 1
+            try:
+                # 必须是"带控制台的最小化窗口"：该客户端是控制台程序，无控制台会立刻退出
+                subprocess.Popen(["cmd", "/c", "start", "", "/min", AUTO["exe"]],
+                                 cwd=AUTO["cwd"] or None,
+                                 creationflags=0x00000010)  # CREATE_NEW_CONSOLE
+            except Exception:
+                pass
+            dead = 0
+
+
 class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
@@ -98,8 +128,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8121)
     ap.add_argument("--target-port", type=int, default=8101)
+    ap.add_argument("--auto-start", default="", help="后端 exe 全路径；给了就兼做看门狗")
+    ap.add_argument("--workdir", default="", help="exe 工作目录")
     a = ap.parse_args()
     Handler.target = f"http://127.0.0.1:{a.target_port}"
+    if a.auto_start:
+        AUTO["exe"] = a.auto_start
+        AUTO["cwd"] = a.workdir
+        threading.Thread(target=health_loop, daemon=True).start()
+        print(f"[看门狗] 后端不可达时自动拉起：{a.auto_start}")
     print(f"[自愈串行网关] 127.0.0.1:{a.port} → {Handler.target}（串行 + 崩溃等待重试）")
     Server(("127.0.0.1", a.port), Handler).serve_forever()
 
