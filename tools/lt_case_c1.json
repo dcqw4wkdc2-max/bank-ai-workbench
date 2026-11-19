@@ -1,0 +1,75 @@
+{
+ "base": "http://127.0.0.1:8101",
+ "path": "case",
+ "requests": 8,
+ "concurrency": 1,
+ "ok": 8,
+ "fail": 0,
+ "success_rate": 100.0,
+ "duration_sec": 17.4,
+ "rps": 0.46,
+ "latency": {
+  "min": 0.44,
+  "p50": 3.45,
+  "p90": 4.29,
+  "p99": 4.29,
+  "max": 4.29,
+  "avg": 2.17
+ },
+ "status_codes": {
+  "200": 8
+ },
+ "errors": {},
+ "alive_before": {
+  "ok": true,
+  "probe": "/internal/api/v1/health",
+  "status": 200
+ },
+ "alive_after": {
+  "ok": true,
+  "probe": "/internal/api/v1/health",
+  "status": 200
+ },
+ "sampled_records": [
+  {
+   "status": 200,
+   "ref": "REQ-20261119-8EAE58",
+   "sec": 4.29
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-1949D9",
+   "sec": 0.46
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-ADF90C",
+   "sec": 0.48
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-3A7A4F",
+   "sec": 3.8
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-F5A583",
+   "sec": 0.44
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-C12E3F",
+   "sec": 0.46
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-AEEDC5",
+   "sec": 3.99
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-F83A96",
+   "sec": 3.45
+  }
+ ]
+}

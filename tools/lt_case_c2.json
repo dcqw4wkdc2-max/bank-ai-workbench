@@ -1,0 +1,69 @@
+{
+ "base": "http://127.0.0.1:8101",
+ "path": "case",
+ "requests": 6,
+ "concurrency": 2,
+ "ok": 3,
+ "fail": 3,
+ "success_rate": 50.0,
+ "duration_sec": 11.7,
+ "rps": 0.51,
+ "latency": {
+  "min": 0.52,
+  "p50": 4.61,
+  "p90": 5.18,
+  "p99": 5.18,
+  "max": 5.18,
+  "avg": 3.57
+ },
+ "status_codes": {
+  "200": 3,
+  "ERR": 3
+ },
+ "errors": {
+  "[WinError 10054] 远程主机强迫关闭了一个现有的连接。": 2,
+  "<urlopen error [WinError 10061] 由于目标计算机积极拒绝，无法连接。>": 1
+ },
+ "alive_before": {
+  "ok": true,
+  "probe": "/internal/api/v1/health",
+  "status": 200
+ },
+ "alive_after": {
+  "ok": true,
+  "probe": "/internal/api/v1/health",
+  "status": 200
+ },
+ "sampled_records": [
+  {
+   "status": 200,
+   "ref": "REQ-20261119-C689B9",
+   "sec": 0.52
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-92E799",
+   "sec": 3.97
+  },
+  {
+   "status": 200,
+   "ref": "REQ-20261119-C5C60C",
+   "sec": 4.61
+  },
+  {
+   "status": "ERR",
+   "ref": null,
+   "sec": 5.06
+  },
+  {
+   "status": "ERR",
+   "ref": null,
+   "sec": 5.18
+  },
+  {
+   "status": "ERR",
+   "ref": null,
+   "sec": 2.05
+  }
+ ]
+}

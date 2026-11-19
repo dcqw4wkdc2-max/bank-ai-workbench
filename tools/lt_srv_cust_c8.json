@@ -1,0 +1,85 @@
+{
+ "base": "http://43.138.192.118:19092",
+ "path": "customer",
+ "requests": 16,
+ "concurrency": 8,
+ "ok": 16,
+ "fail": 0,
+ "success_rate": 100.0,
+ "duration_sec": 11.6,
+ "rps": 1.38,
+ "latency": {
+  "min": 4.3,
+  "p50": 5.44,
+  "p90": 5.91,
+  "p99": 6.22,
+  "max": 6.22,
+  "avg": 5.19
+ },
+ "status_codes": {
+  "200": 16
+ },
+ "errors": {},
+ "alive_before": {
+  "ok": true,
+  "probe": "/outer/api/v1/health",
+  "status": 200
+ },
+ "alive_after": {
+  "ok": true,
+  "probe": "/outer/api/v1/health",
+  "status": 200
+ },
+ "sampled_records": [
+  {
+   "status": 200,
+   "ref": "FB202611190410136d998abb",
+   "sec": 5.11
+  },
+  {
+   "status": 200,
+   "ref": "FB202611190410138e61aed1",
+   "sec": 5.44
+  },
+  {
+   "status": 200,
+   "ref": "FB20261119041013f4efc106",
+   "sec": 5.45
+  },
+  {
+   "status": 200,
+   "ref": "FB2026111904101348c4d21b",
+   "sec": 5.48
+  },
+  {
+   "status": 200,
+   "ref": "FB20261119041013316aab2a",
+   "sec": 5.51
+  },
+  {
+   "status": 200,
+   "ref": "FB2026111904101344c4d74a",
+   "sec": 5.63
+  },
+  {
+   "status": 200,
+   "ref": "FB20261119041013e7e3da68",
+   "sec": 5.72
+  },
+  {
+   "status": 200,
+   "ref": "FB20261119041014d013f9bf",
+   "sec": 6.22
+  },
+  {
+   "status": 200,
+   "ref": "FB2026111904101801f40a5b",
+   "sec": 4.56
+  },
+  {
+   "status": 200,
+   "ref": "FB202611190410183882c057",
+   "sec": 4.31
+  }
+ ]
+}
