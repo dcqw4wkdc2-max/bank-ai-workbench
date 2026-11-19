@@ -131,7 +131,7 @@
 <script>
 const CAT = {ACCOUNT:'账户', LOAN:'贷款', CREDIT_CARD:'信用卡', OTHER:'其他'};
 const ST = {SUBMITTED:'已受理', AI_ANSWERING:'AI 应答中', CLOSED_AI:'AI 已回复',
-  PENDING_HUMAN:'待人工接管', HUMAN_ANSWERING:'人工处理中', CLOSED_HUMAN:'已办结', UNKNOWN:'查询失败'};
+  PENDING_HUMAN:'已转人工跟进', HUMAN_ANSWERING:'人工处理中', CLOSED_HUMAN:'已办结', UNKNOWN:'查询失败'};
 const $ = s => document.querySelector(s);
 
 // 伪 openid（与小程序同逻辑：本地生成、长期稳定；生产应 code2session 换取）
@@ -185,7 +185,7 @@ $('#submit').onclick = async () => {
     if (!fbList.includes(d.fb_id)) { fbList.unshift(d.fb_id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
     toast(d.verdict === 'pass' ? '提交成功，AI 正在处理' : '已受理');
     openChat(d.fb_id);
-  } catch (e) { toast('提交失败：' + e.message); }
+  } catch (e) { const m=/不存在|not found/i.test(e.message||'') ? '提交失败，请稍后重试' : e.message; toast(m); }
   btn.disabled = false;
 };
 
@@ -215,7 +215,7 @@ $('#qbtn').onclick = async () => {
     await api('/feedback/api/v1/tickets/' + id + '?openid=' + encodeURIComponent(openid));
     if (!fbList.includes(id)) { fbList.unshift(id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
     openChat(id);
-  } catch (e) { toast('查询失败：' + e.message); }
+  } catch (e) { const m=/不存在|未找到|not found/i.test(e.message||'') ? '未找到该工单，请核对工单号' : e.message; toast(m); }
 };
 
 // 会话页
