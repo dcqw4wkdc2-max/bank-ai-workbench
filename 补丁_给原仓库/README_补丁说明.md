@@ -106,3 +106,18 @@ python tools/wb_loadtest.py --base http://127.0.0.1:8101 --path case --n 20 --c 
 - **但**：默认口令 `abc123456 / abc122333 / Tech@2026` 在 **9 个文件**明码；内网模型地址 `106.55.2.189:8000` 在 **5 个文件**；含“微光/任务书”的内部方案 **10 个文件**
 
 任务书写明“未经微光工作室授权，请勿用于其它商业用途”。建议转私有，至少把口令与内网地址从 README / docs 摘掉。我们自己的演示环境用的是同一套口令，我会换掉。
+
+
+---
+
+## 七、已经直接开成 PR 了（2026-11-19 21:20）
+
+不用你手动 apply 了，补丁已提交为 PR：
+
+**https://github.com/1708420870/bank-ai-workbench/pull/1**
+
+- 来源分支：`dcqw4wkdc2-max/bank-ai-workbench-1 : fix/case-fault-and-privacy`
+- 变更：**6 文件 +243/-4**（3 源文件 + 3 测试文件）
+- 状态：`open`，`mergeable: true`
+
+他只需要：**Review → Merge**。合并后本地 `git pull`，跑 `python -m pytest -q`（期望 104 passed）与 `tools/run_cases.py`（期望 12/12）。
