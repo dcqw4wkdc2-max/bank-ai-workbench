@@ -62,6 +62,8 @@ def main():
             status, decision = d.get("status"), d.get("decision")
         except urllib.error.HTTPError as e:
             status, decision = f"HTTP{e.code}", "ERR"
+        except Exception as e:
+            status, decision = "连接失败", str(e)[:16]
         if grp == "A":
             good = decision == "SHOW_SUGGESTION"
         elif grp == "B":
