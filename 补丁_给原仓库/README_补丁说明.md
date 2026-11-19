@@ -121,3 +121,53 @@ python tools/wb_loadtest.py --base http://127.0.0.1:8101 --path case --n 20 --c 
 - 状态：`open`，`mergeable: true`
 
 他只需要：**Review → Merge**。合并后本地 `git pull`，跑 `python -m pytest -q`（期望 104 passed）与 `tools/run_cases.py`（期望 12/12）。
+
+
+---
+
+## 八、补丁追加一处：模型端点兼容 + 转人工口径（2026-11-19 21:40）
+
+PR 里现在有两个 commit，共 **7 文件 +251/-5**。
+
+### 8.1 `inner/agent.py`：`reasoning_effort=none`
+
+你用的是 `chat_template_kwargs: {enable_thinking: False}`——**vLLM 认，OpenAI 兼容端点（中转站/DeepSeek）不认**。
+接上去的表现：模型调用返回 200（日志 `hermes_completion_ok`），但内容落在 `reasoning_content`、`content` 为空 →
+schema 校验失败 → 退化成"转人工"，客户看到的是"已转接人工"而不是解答。
+
+请求体补一行 `"reasoning_effort": "none"` 即可。**vLLM 端点不受影响**（多余字段被忽略）。
+
+### 8.2 `inner/agent.py`：提示词补第 7 条判定口径
+
+原提示词第 5 条要求"涉及资金安全…建议 HUMAN_REVIEW"，模型把「想对一笔消费**提争议**，要什么材料」也判成资金安全 →
+客户侧一律转人工。补第 7 条：
+
+> 仅咨询办理流程、所需材料、查询路径属于低风险，不要标 `HUMAN_REVIEW_REQUIRED`；
+> 只有客户主张资金已损失、要求退款/赔付/冻结/挂失、或明确为陌生交易时，才标。
+
+---
+
+## 九、这套现在是**线上跑的版本**（不是纸上方案）
+
+服务器上已经用你的源码 + 这个补丁跑起来了：
+
+| 入口 | 地址 | 跑的是什么 |
+|---|---|---|
+| 客户 | http://43.138.192.118:19094/ | 你的 `outer`（18403）+ H5 页 |
+| 控制台 | http://43.138.192.118:19096/ | 你的 `inner`（18401），Basic Auth `demo / WgBank2026` |
+| 原版对比 | 19092 / 19093 | 之前交付的编译产物（未修） |
+
+- 部署位置：`/opt/banksrc/app`（源码，含补丁）、数据 `/opt/banksrc/data`、模型配置 `/opt/banksrc/model.env`（600，不入库）
+- 三个 systemd：`banksrc-inner` / `banksrc-dmz` / `banksrc-outer`（18401 / 18402 / 18403）
+- 模型：`MODEL_IMPL=real`，端点走 OpenAI 兼容中转
+
+### 线上实测（2026-11-19 21:45）
+
+| 项 | 结果 |
+|---|---|
+| 12 例验收（`run_cases.py --base 19096 --basic`） | **12/12**（A 4/4、B 4/4、C 4/4） |
+| 客户页·低风险「提争议要什么材料」 | `AI_ANSWERING`，答复「App『交易争议』入口 + 订单信息与沟通记录」 |
+| 客户页·高风险「卡在身边却陌生消费」 | `PENDING_HUMAN` + 安抚 + 反诈提示 |
+| 并发 5 / 10（坐席通道，真模型） | **100% / 100%**（P90 10.1s / 17.9s） |
+
+也就是说：**你要给客户看，直接用 19094（客户）+ 19096（控制台）就行**，不用再拿本地包。

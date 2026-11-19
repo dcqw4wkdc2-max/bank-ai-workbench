@@ -1,3 +1,30 @@
+diff --git a/inner/agent.py b/inner/agent.py
+index 1f9ed77..38b96c8 100644
+--- a/inner/agent.py
++++ b/inner/agent.py
+@@ -142,7 +142,10 @@ def _hermes_completion(intent: str, context: str, ep: Endpoint) -> dict:
+         "并建议 HUMAN_REVIEW 转人工优先跟进；但仅限上述高风险场景——"
+         "操作类问题（如登录异常、功能使用、规则咨询）不得转人工，应先安抚、给出可操作的自助排查建议，"
+         "再围绕现象追问细节；"
+-        "6）客户已明确要求人工服务时，直接确认转接，不再劝说使用自助功能。"
++        "6）客户已明确要求人工服务时，直接确认转接，不再劝说使用自助功能；"
++        "7）判定口径补充（v1.5.1）：仅咨询办理流程、所需材料、查询路径属于低风险，"
++        "不要标 HUMAN_REVIEW_REQUIRED，直接给出具体办理路径与材料清单；"
++        "只有客户主张资金已损失、要求退款/赔付/冻结/挂失、或明确为陌生交易时，才标 HUMAN_REVIEW_REQUIRED。"
+     )
+     user_prompt = f"意图分类（内部参考）：{intent}\n脱敏会话上下文：{context}"
+     r = httpx.post(
+@@ -153,6 +156,10 @@ def _hermes_completion(intent: str, context: str, ep: Endpoint) -> dict:
+             "temperature": 0.4,
+             "max_tokens": 600,
+             "chat_template_kwargs": {"enable_thinking": False},
++            # v1.5.1：vLLM 用 chat_template_kwargs 关思考；OpenAI 兼容端点（如中转站）
++            # 不认这个字段，需要 reasoning_effort=none，否则内容落到 reasoning_content、
++            # content 为空，schema 校验失败后退化成"转人工"。
++            "reasoning_effort": "none",
+             "messages": [
+                 {"role": "system", "content": sys_prompt},
+                 {"role": "user", "content": user_prompt},
 diff --git a/inner/app.py b/inner/app.py
 index ea5700e..6b09edc 100644
 --- a/inner/app.py
