@@ -53,3 +53,36 @@
 - 原客户端：**能演示，异常路径全断**，且没有源码改不了。
 - v2：**异常路径接通**，13.1 两项原本卡住的门槛在 v2 上通过；代价是必须放弃编译产物、用自己的实现。
 - 给客户/上级的口径：**"我们用 v2 证明这套架构能把两项门槛做通；工程化落地需要源码或按 v2 继续做。"**
+
+
+---
+
+## 六、模型接入（2026-11-19 19:10 完成）
+
+v2 默认用**规则模板**回答（离线、零费用、零出域）。接真模型只需三个环境变量，**不改代码**：
+
+```bat
+set MODEL_BASE_URL=http://<你的端点>/v1
+set MODEL_API_KEY=<key>
+set MODEL_NAME=<模型名，如 Qwen3.5-9B-AWQ>
+set MODEL_TIMEOUT=8
+python app.py --port 18201
+```
+
+架构约束（写进代码了）：
+- 模型**只出建议**（摘要 / 动作码 / 待补充），裁决永远由规则层做；
+- 模型引用的规则号必须在内网规则库里，否则被丢弃；
+- 超时 → `ModelTimeout` → 工单置 `TIMEOUT` + 错误卡 + 转人工；
+- 输出不是 JSON / 缺字段 → `ModelSchemaError` → 置 `REJECTED` + 阻断自动回复；
+- 端点不可达 → 回落规则模板，工单标 `template-v2(fallback)`。
+
+### 三种失败路径的实测（用本地假端点验证，零费用）
+
+| 场景 | 端点 | 结果 |
+|---|---|---|
+| 正常 | fake ok（合法 JSON） | `RESTORED / SHOW_SUGGESTION`，建议文本来自模型，带 `【引用规则】R-DISPUTE-01、R-DISPUTE-02` |
+| 超时 | fake slow（睡 15 秒） | **5.1 秒后** `TIMEOUT` + `EC-TIMEOUT` + 转人工 |
+| 非法 JSON | fake bad（返回中文散文） | **0.1 秒** `REJECTED` + `EC-BADJSON` + 阻断自动回复 |
+| 端点不可达 | 关闭的端口 | 回落模板，`model_version=template-v2(fallback)`，业务不中断 |
+
+原客户端的模型配置也扒出来了（`common/config.pyc`）：`HERMES_BASE_URL=http://106.55.2.189:8000/v1`、`HERMES_MODEL=Qwen3.5-9B-AWQ`，但**key 是占位符**（base64 解出来是 `your-secret-key-here`），实测返回 401。所以要用真模型，需要真实 key。
