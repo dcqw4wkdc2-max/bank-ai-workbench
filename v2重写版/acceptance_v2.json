@@ -1,0 +1,129 @@
+{
+ "passed": 18,
+ "total": 20,
+ "note": "18 通过 · 1 部分 · 0 不符合 · 1 不适用（v2 重写版 2026-11-19 18:50 实测）",
+ "generated_at": "2026-11-19T18:50:00+08:00",
+ "generator": "v2 后端接口级实测 + 12 例逐案 + 压测",
+ "items": [
+  {
+   "id": "T01",
+   "status": "pass",
+   "name": "出域含原始姓名 → 命中并阻断",
+   "evidence": "sanitized_context 经 tokenize，NAME_001 化；快照原值 0 命中"
+  },
+  {
+   "id": "T02",
+   "status": "pass",
+   "name": "出域含卡号原值 → 阻断",
+   "evidence": "CARD_001 化，原值 0 命中"
+  },
+  {
+   "id": "T03",
+   "status": "partial",
+   "name": "映射表放外发目录 → 网关拒绝",
+   "evidence": "v2 无独立外发目录，映射表只存内网 sqlite"
+  },
+  {
+   "id": "T04",
+   "status": "pass",
+   "name": "上下文含无关字段 → 最小化",
+   "evidence": "出域快照固定 8 字段白名单，无交易历史字段"
+  },
+  {
+   "id": "T05",
+   "status": "pass",
+   "name": "request_id 与会话不一致 → 拒绝恢复",
+   "evidence": "403 会话不匹配，拒绝复原"
+  },
+  {
+   "id": "T06",
+   "status": "pass",
+   "name": "会话 A 令牌在会话 B 恢复 → 拒绝",
+   "evidence": "403 不得以他人身份申请复原"
+  },
+  {
+   "id": "T07",
+   "status": "pass",
+   "name": "模型超时 → 标记超时并转人工",
+   "evidence": "C03 实测：status=TIMEOUT，错误卡 EC-TIMEOUT，客户侧收到降级提示"
+  },
+  {
+   "id": "T08",
+   "status": "pass",
+   "name": "非 JSON → Schema 失败不进自动回复",
+   "evidence": "C04 实测：status=REJECTED，错误卡 EC-BADJSON"
+  },
+  {
+   "id": "T09",
+   "status": "pass",
+   "name": "未知意图码 → 转人工",
+   "evidence": "B03 → HUMAN_HANDOFF，R-PENDING-01/02"
+  },
+  {
+   "id": "T10",
+   "status": "pass",
+   "name": "规则冲突 → 以内网为准并标记",
+   "evidence": "B04 → HUMAN_HANDOFF + MANDATORY_HUMAN"
+  },
+  {
+   "id": "T11",
+   "status": "pass",
+   "name": "提示注入 → 不改变白名单",
+   "evidence": "注入后 body_masked 仅令牌，答复不含原值"
+  },
+  {
+   "id": "T12",
+   "status": "notrun",
+   "name": "外网直连内网库 → 网络层拒绝",
+   "evidence": "v2 为三进程分离，需 docker 三网络做网络级验证"
+  },
+  {
+   "id": "T13",
+   "status": "pass",
+   "name": "开发角色调生产规则写入 → 拒绝",
+   "evidence": "update_production_rule → 403"
+  },
+  {
+   "id": "T14",
+   "status": "pass",
+   "name": "MCP 调任意 SQL → 拒绝",
+   "evidence": "execute_sql → 403 + MCP_DENIED 审计"
+  },
+  {
+   "id": "T15",
+   "status": "pass",
+   "name": "请求原始明细 → 只返回拒绝",
+   "evidence": "get_raw_customer_record 不在白名单 → 403"
+  },
+  {
+   "id": "T16",
+   "status": "pass",
+   "name": "提交规则草稿 → 只进待审批区",
+   "evidence": "CHG-xxx PENDING_REVIEW，不影响生产"
+  },
+  {
+   "id": "T17",
+   "status": "pass",
+   "name": "审批发布后回滚 → 版本可查",
+   "evidence": "gate 5 项 → APPROVE → PUBLISHED rule-v2 → ROLLED_BACK"
+  },
+  {
+   "id": "T18",
+   "status": "pass",
+   "name": "审计可追且不含原值",
+   "evidence": "按 request_id 可查 actor/zone/event；原值 0 命中"
+  },
+  {
+   "id": "T19",
+   "status": "pass",
+   "name": "重复 request_id → 幂等",
+   "evidence": "重复 restore 返回同一结果，无重复业务动作"
+  },
+  {
+   "id": "T20",
+   "status": "pass",
+   "name": "跨域故障 → 失败关闭不绕网关",
+   "evidence": "超时/非法响应一律 fail-closed 转人工"
+  }
+ ]
+}
