@@ -106,3 +106,27 @@ python app.py --port 18201
 - 中转站价格与 DeepSeek 官方不同，实际账单以 `yyxuetang.com` 后台为准；这次用量小到可以忽略。
 - 思考模型必须 `reasoning_effort=none`，否则内容跑到 `reasoning_content`、`content` 为空（原客户端 `agent.pyc` 的注释也写了这一点）。
 - 服务器上目前**没有放 key**，跑的是模板模式；要开模型，把 `.prov`（base/key/model）放上去后 `python run_model.py --port 18201` 即可。
+
+
+---
+
+## 七、服务器现状（2026-11-19 20:00）
+
+- 服务器 v2 **已接真模型**：`/opt/bankv2/app/.prov`（root 读取 600，不入 git、不进日志），systemd 三个 unit 通过 `run_model.py` 启动。
+- 服务器回归：**12/12 符合**，4 次模型调用共 **1,117 tokens**（prompt 745 + completion 372），单次 1.1–2.8 秒。
+- 公网：客户 http://43.138.192.118:19094/ ｜ 控制台 http://43.138.192.118:19096/（demo / WgBank2026）
+
+### key 的位置与移除
+
+```bash
+sudo cat /opt/bankv2/app/.prov        # 查看（含 key，慎用）
+sudo rm /opt/bankv2/app/.prov         # 删掉即回落到规则模板模式
+sudo systemctl restart bankv2-inner    # 重启生效
+```
+`.gitignore` 已排除 `.prov`；v2 交付包里不含 key。
+
+### 客户通道与坐席通道的差异（已知）
+
+- 坐席通道：A 组走真模型出建议（`model_version=DeepSeek-V4.1-Flash`）。
+- 客户通道：为保证低延迟与零风险，答复仍走**规则模板**（`template-v2`），但同样经过同一套裁决与隐私判据。
+- 如果要求两边都用模型，把 `fb_submit()` 里的 `_fb_reply` 换成模型渲染即可（改一处）。
