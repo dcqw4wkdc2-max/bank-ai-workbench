@@ -1,0 +1,59 @@
+diff --git a/inner/service.py b/inner/service.py
+index 2a97d3e..96d93c6 100644
+--- a/inner/service.py
++++ b/inner/service.py
+@@ -5,6 +5,7 @@
+ from __future__ import annotations
+ 
+ import json
++import re
+ import uuid
+ from datetime import datetime, timedelta, timezone
+ 
+@@ -90,9 +91,46 @@ async def handle_case(*, case_id: str, emp_id: str, session_id: str | None, note
+     audit.log("inner", "CASE_CREATED", request_id=request_id, actor=emp_id,
+               detail={"case_id": case_id, "intent": intent, "session_id": session_id})
+ 
++    # ②.5【补丁 v1.5.1】案例级故障演练：case.fault 声明了就按故障处理，不再走模型
++    # 背景：C03/C04 在 cases 表里带着 fault=timeout / bad_json，但原实现从未读取，
++    #       结果 0.4 秒照常返回 RESTORED（见 12 例逐案 C03/C04）。
++    _fault = (case.get("fault") or "").strip()
++    if _fault in {"timeout", "bad_json"}:
++        _status = "TIMEOUT" if _fault == "timeout" else "REJECTED"
++        _reason = "UPSTREAM_UNAVAILABLE" if _fault == "timeout" else "SCHEMA_INVALID"
++        audit.log("inner", "FAULT_INJECTED", request_id=request_id, actor=emp_id,
++                  severity="medium",
++                  detail={"fault": _fault, "source": "case.fault", "case_id": case_id})
++        _persist(request_id, status=_status, decision="HUMAN_HANDOFF",
++                 reason_codes=json.dumps([_reason, "FAIL_CLOSED_HUMAN"], ensure_ascii=False))
++        return _result(request_id)
++
+     # ③ 最小取数
+     raw_text = case["narrative"] if not note else f"{case['narrative']} 补充说明：{note}"
+ 
++    # ③.5【补丁 v1.5.1】隐私三级判据：先判「人有没有把原始标识贴进业务文本」，再脱敏。
++    #  - T1 命中 18 位证件号 → 阻断复原 + 转人工（C01）
++    #  - T1' 补充说明（note）里出现完整卡号 → 阻断复原 + 转人工
++    #  - T2 要求回拨/回访且给了完整手机号 → 外呼需二次授权，转人工（C02）
++    #  - A 组案例正文里的合成卡号/手机号不受影响（它们来自业务库，不是人工粘贴）
++    _hit_id = re.search(r"(?<!\d)\d{17}[\dXx](?!\d)", raw_text)
++    _hit_card_in_note = re.search(r"(?<!\d)\d{16,19}(?!\d)", note or "")
++    _hit_phone = re.search(r"(?<!\d)1[3-9]\d{9}(?!\d)", raw_text or "")
++    _judge = None
++    if _hit_id:
++        _judge = ("BLOCKED", "PRIVACY_ID_NUMBER", "critical", "命中 18 位证件号，禁止复原并转人工")
++    elif _hit_card_in_note:
++        _judge = ("BLOCKED", "PRIVACY_RAW_CARD_IN_NOTE", "critical", "补充说明中出现完整卡号，禁止复原并转人工")
++    elif re.search(r"回拨|回访", raw_text or "") and _hit_phone:
++        _judge = ("HUMAN_HANDOFF", "CALLBACK_REQUIRES_AUTH", "medium", "外呼回访需二次授权，转人工")
++    if _judge:
++        audit.log("inner", "PRIVACY_JUDGED", request_id=request_id, actor=emp_id,
++                  severity=_judge[2],
++                  detail={"rule": _judge[1], "msg": _judge[3], "case_id": case_id})
++        _persist(request_id, status=_judge[0], decision="HUMAN_HANDOFF",
++                 reason_codes=json.dumps([_judge[1], "MANDATORY_HUMAN"], ensure_ascii=False))
++        return _result(request_id)
++
+     # ④ 字段识别与令牌化
+     privacy = _privacy()
+     try:
