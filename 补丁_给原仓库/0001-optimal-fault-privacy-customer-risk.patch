@@ -1,0 +1,226 @@
+diff --git a/inner/app.py b/inner/app.py
+index ea5700e..ad73cf9 100644
+--- a/inner/app.py
++++ b/inner/app.py
+@@ -1253,7 +1253,13 @@ def fb_ingest_ep(req: FeedbackIngestRequest, request: Request) -> dict:
+     # 模型可能漏判（冒烟实测），资金安全宁可错转也不可漏转。
+     # 按导师意见：转人工的同时仍下发一条安抚答复（谨慎处理策略），
+     # 客户不再是干巳巳的「已受理待人工接管」，而是有人味儿的即时回应。
+-    if any(k in masked for k in ("骗", "盗", "洗钱", "资金损失", "被扣款", "冻结")):
++    if any(k in masked for k in (
++        # v1.5.1：补齐"疑似未授权"的表达——原来只认「盗/骗/冻结」，
++        # 客户说「陌生消费」「未授权」「不是本人」时会被当成普通咨询自动答复。
++        "骗", "盗", "洗钱", "资金损失", "被扣款", "冻结",
++        "陌生消费", "未授权", "不是本人", "非本人", "被刷", "异常消费",
++        "异常交易", "盗刷", "退款", "冒名", "挂失",
++    )):
+         db.fb_set_status(req.fb_id, "PENDING_HUMAN", now)
+         _fb_notify_status(req.fb_id, "PENDING_HUMAN")
+         notice = ("您好，您反映的问题我们已收到，非常理解您的心情。"
+diff --git a/inner/privacy.py b/inner/privacy.py
+index 2bc2582..ae32fb6 100644
+--- a/inner/privacy.py
++++ b/inner/privacy.py
+@@ -119,6 +119,32 @@ class PrivacyService:
+ 
+         return self.scan_text(json.dumps(payload, ensure_ascii=False))
+ 
++    # ---------- 业务判据（v1.5.1 新增） ----------
++    _CALLBACK = re.compile(r"回拨|回访")
++
++    def judge(self, text: str, note: str | None = None) -> dict | None:
++        """隐私三级判据：判「人有没有把原始标识贴进业务文本」，不判业务库取来的字段。
++
++        T1  命中 18 位证件号                         → BLOCKED（禁止复原 + 转人工）
++        T1' 补充说明（note）里出现完整卡号            → BLOCKED（人工把原文贴进了业务文本）
++        T2  要求回拨/回访且给了完整手机号             → HUMAN_HANDOFF（外呼需二次授权）
++
++        为什么不判正文里的卡号/手机号：A 组案例的正文本来就有合成卡号与手机号
++        （来自业务库、按最小权限取得），判正文会把 A 组全部误杀。
++        真正的风险是「人把原始标识粘进了业务文本」，所以卡号只判 note。
++        """
++        text = text or ""
++        if _ID.search(text):
++            return {"status": "BLOCKED", "code": "PRIVACY_ID_NUMBER", "severity": "critical",
++                    "msg": "命中 18 位证件号，禁止复原并转人工"}
++        if note and _CARD.search(note):
++            return {"status": "BLOCKED", "code": "PRIVACY_RAW_CARD_IN_NOTE", "severity": "critical",
++                    "msg": "补充说明中出现完整卡号，禁止复原并转人工"}
++        if self._CALLBACK.search(text) and _PHONE.search(text):
++            return {"status": "HUMAN_HANDOFF", "code": "CALLBACK_REQUIRES_AUTH", "severity": "medium",
++                    "msg": "外呼回访需二次授权，转人工"}
++        return None
++
+ 
+ def restore_tokens(text: str, token_rows: list[dict], data_key: str) -> tuple[str, list[str]]:
+     """按令牌映射回填真实值。调用方必须先完成三元匹配校验。"""
+diff --git a/inner/service.py b/inner/service.py
+index 2a97d3e..1ba0157 100644
+--- a/inner/service.py
++++ b/inner/service.py
+@@ -90,11 +90,35 @@ async def handle_case(*, case_id: str, emp_id: str, session_id: str | None, note
+     audit.log("inner", "CASE_CREATED", request_id=request_id, actor=emp_id,
+               detail={"case_id": case_id, "intent": intent, "session_id": session_id})
+ 
++    # ②.5【补丁 v1.5.1】案例级故障演练：case.fault 声明了就按故障处理，不再走模型
++    # 背景：C03/C04 在 cases 表里带着 fault=timeout / bad_json，但原实现从未读取，
++    #       结果 0.4 秒照常返回 RESTORED（见 12 例逐案 C03/C04）。
++    _fault = (case.get("fault") or "").strip()
++    if _fault in {"timeout", "bad_json"}:
++        _status = "TIMEOUT" if _fault == "timeout" else "REJECTED"
++        _reason = "UPSTREAM_UNAVAILABLE" if _fault == "timeout" else "SCHEMA_INVALID"
++        audit.log("inner", "FAULT_INJECTED", request_id=request_id, actor=emp_id,
++                  severity="medium",
++                  detail={"fault": _fault, "source": "case.fault", "case_id": case_id})
++        _persist(request_id, status=_status, decision="HUMAN_HANDOFF",
++                 reason_codes=json.dumps([_reason, "FAIL_CLOSED_HUMAN"], ensure_ascii=False))
++        return _result(request_id)
++
+     # ③ 最小取数
+     raw_text = case["narrative"] if not note else f"{case['narrative']} 补充说明：{note}"
+ 
+-    # ④ 字段识别与令牌化
++    # ③.5【补丁 v1.5.1】隐私三级判据（判据实现在 privacy.py，单一职责）
+     privacy = _privacy()
++    _judge = privacy.judge(raw_text, note)
++    if _judge:
++        audit.log("inner", "PRIVACY_JUDGED", request_id=request_id, actor=emp_id,
++                  severity=_judge["severity"],
++                  detail={"rule": _judge["code"], "msg": _judge["msg"], "case_id": case_id})
++        _persist(request_id, status=_judge["status"], decision="HUMAN_HANDOFF",
++                 reason_codes=json.dumps([_judge["code"], "MANDATORY_HUMAN"], ensure_ascii=False))
++        return _result(request_id)
++
++    # ④ 字段识别与令牌化（privacy 实例已在 ③.5 建好）
+     try:
+         masked = privacy.mask(raw_text, request_id)
+     except Exception as exc:
+diff --git a/tests/test_case_fault.py b/tests/test_case_fault.py
+new file mode 100644
+index 0000000..e1d40bd
+--- /dev/null
++++ b/tests/test_case_fault.py
+@@ -0,0 +1,54 @@
++"""案例级故障演练的验收测试（v1.5.1）
++
++对应 12 例里的 C 组：
++  C03（fault=timeout）  → 工单 TIMEOUT，decision=HUMAN_HANDOFF，无复原结果
++  C04（fault=bad_json） → 工单 REJECTED，decision=HUMAN_HANDOFF
++
++背景：`cases` 表本来就有 fault 字段，但 handle_case 从未读取，
++所以这两例 0.4 秒照常返回 RESTORED。这个测试锁住修复后的行为。
++"""
++from __future__ import annotations
++
++import httpx
++import pytest
++
++from tests.env import TEST_ACCOUNT
++
++
++def _own_cookie(urls: dict) -> dict:
++    """自带会话，不依赖共享 COOKIE —— 避免与其它用例（SINGLE_SESSION）互相顶号。"""
++    r = httpx.post(f"{urls['inner']}/internal/api/v1/auth/login",
++                   json=TEST_ACCOUNT, timeout=20)
++    assert r.status_code == 200, r.text
++    return dict(r.cookies)
++
++
++def _run_case(urls: dict, case_id: str) -> dict:
++    r = httpx.post(f"{urls['inner']}/internal/api/v1/cases",
++                   json={"case_id": case_id, "emp_id": "B001"},
++                   timeout=40, cookies=_own_cookie(urls))
++    assert r.status_code == 200, r.text
++    return r.json()
++
++
++@pytest.mark.parametrize(
++    "case_id,expect_status,expect_reason",
++    [
++        ("C03", "TIMEOUT", "UPSTREAM_UNAVAILABLE"),
++        ("C04", "REJECTED", "SCHEMA_INVALID"),
++    ],
++)
++def test_case_fault_short_circuits(urls, case_id, expect_status, expect_reason):
++    d = _run_case(urls, case_id)
++    assert d["status"] == expect_status, f"{case_id} 期望 {expect_status}，实际 {d['status']}"
++    assert d["decision"] == "HUMAN_HANDOFF"
++    assert expect_reason in (d.get("reason_codes") or []), d.get("reason_codes")
++    # fail-closed：故障案例不得产出复原文本
++    assert not d.get("restored_text")
++
++
++def test_case_without_fault_still_normal(urls):
++    """对照组：A01 没有 fault，必须仍然是可展示建议（不能因为改判据被误伤）"""
++    d = _run_case(urls, "A01")
++    assert d["status"] == "RESTORED"
++    assert d["decision"] == "SHOW_SUGGESTION"
+diff --git a/tests/test_privacy_judge.py b/tests/test_privacy_judge.py
+new file mode 100644
+index 0000000..bd4bc31
+--- /dev/null
++++ b/tests/test_privacy_judge.py
+@@ -0,0 +1,63 @@
++"""隐私三级判据的单元测试（v1.5.1）
++
++对应 12 例验收里的 C 组：
++  C01 带完整证件号          → BLOCKED / PRIVACY_ID_NUMBER
++  C02 要求回拨且给完整手机号 → HUMAN_HANDOFF / CALLBACK_REQUIRES_AUTH
++  A 组正文里的合成卡号/手机号 → 不得命中（否则 A 组全误杀）
++
++这几条是纯函数级验证，不需要起服务。
++"""
++from __future__ import annotations
++
++from inner.privacy import PrivacyService
++
++
++def _svc() -> PrivacyService:
++    return PrivacyService([])  # 不注入已知姓名，判据只看标识形态
++
++
++def test_judge_id_number_blocked():
++    """C01：正文出现 18 位证件号 → BLOCKED"""
++    svc = _svc()
++    text = "客户 张示例 办理查询，客服在备注中粘贴了完整身份信息 110101199001011231 与卡号 6222000000000001。"
++    f = svc.judge(text)
++    assert f is not None
++    assert f["status"] == "BLOCKED"
++    assert f["code"] == "PRIVACY_ID_NUMBER"
++    assert f["severity"] == "critical"
++
++
++def test_judge_card_in_note_blocked():
++    """补充说明里出现完整卡号 → BLOCKED（人把原文贴进了业务文本）"""
++    svc = _svc()
++    f = svc.judge("客户咨询账单明细", note="卡号 6222000000000009 帮我查一下")
++    assert f is not None
++    assert f["status"] == "BLOCKED"
++    assert f["code"] == "PRIVACY_RAW_CARD_IN_NOTE"
++
++
++def test_judge_callback_requires_human():
++    """C02：要求回拨/回访且给了完整手机号 → 转人工（外呼需二次授权）"""
++    svc = _svc()
++    text = "客户 李合成 来电，回拨号码 13800138002，要求回访，并提及姓名与卡号 6222000000000002。"
++    f = svc.judge(text)
++    assert f is not None
++    assert f["status"] == "HUMAN_HANDOFF"
++    assert f["code"] == "CALLBACK_REQUIRES_AUTH"
++
++
++def test_judge_a_group_text_not_hit():
++    """A 组正文含合成卡号/手机号，但没有人粘贴动作 → 不得命中"""
++    svc = _svc()
++    a01 = ("客户 张示例 来电，询问如何对卡号 6222000000000001 的一笔消费发起争议，"
++           "需要准备哪些材料。联系电话 13800138001。")
++    assert svc.judge(a01) is None
++    a03 = "客户 王样测 询问卡号 6222000000000003 上一笔金额 15600.00 元的交易当前状态。"
++    assert svc.judge(a03) is None
++
++
++def test_judge_plain_text_no_hit():
++    svc = _svc()
++    assert svc.judge("想问一下信用卡年费怎么查") is None
++    assert svc.judge("") is None
++    assert svc.judge(None) is None
