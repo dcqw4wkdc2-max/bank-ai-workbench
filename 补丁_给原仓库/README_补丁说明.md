@@ -267,3 +267,29 @@ B03 → HUMAN_HANDOFF | next: HUMAN_REVIEW | 同上
 A01 → RESTORED       | next: REQUEST_DISPUTE_FORM | reasons: []      （放行场景不受影响）
 12 例：12/12；pytest：119 passed（新增 tests/test_t10_rule_precedence.py 4 项）
 ```
+
+
+---
+
+## 十二、前端增强（客户页与管理页，随分支一起提）
+
+后端 15 文件补丁之外，我们把之前优化好的客户页/管理页能力移植到了你源码的 `h5/` 与 `web/` 上（6 个文件）。
+这些改动**也在同一分支里**（PR 现在共 21 个文件）；只想取后端的话，用 `git apply` 按路径筛：
+
+```bash
+git apply --include='common/*' --include='dmz/*' --include='inner/*' --include='tests/*' 0001-*.patch
+```
+
+界面增强清单：
+
+| 文件 | 增强内容 |
+|---|---|
+| `h5/index.html` | 演示环境标识、常见问题 4 条（点击直接填入）、合成数据页脚、超时提示＋一键再发、转人工后自助指引、时间戳按浏览器时区显示 |
+| `web/admin.html` | 运营概览「处理分布」占比条（最大余数法，合计恒为 100%）、验收看板四态、MCP 工具目录快照、时区本地化 |
+| `web/index.html` | 同上时间戳本地化与工单列表脱敏展示 |
+| `web/login.html`／`web/password.html`／`web/app.css` | 文案与样式收口 |
+
+**为什么单列**：你仓库原来的前端只有基础表单，客户页没有 FAQ、没有演示标识，管理页没有占比与看板四态；
+这些是演示时最容易被问到的页面元素。改动只碰 HTML/CSS，不涉及接口契约。
+
+**实测**：客户页 20,758 B（FAQ 4 条、演示标识、合成数据页脚均在）；管理页 52,260 B；管理端处理分布 BLOCKED 5%／HUMAN_HANDOFF 41%／REJECTED 6%／RESTORED 42%／TIMEOUT 6%，**合计 100%**；12 例仍 12/12。
