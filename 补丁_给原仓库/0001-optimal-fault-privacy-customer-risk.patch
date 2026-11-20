@@ -132,7 +132,7 @@ index c208e55..3dcf05c 100644
  async def fb_status(payload: dict = Body(...), request: Request = None) -> dict:
      _require_service(request)
 diff --git a/h5/index.html b/h5/index.html
-index 5886641..9eed2b1 100644
+index 5886641..c40e093 100644
 --- a/h5/index.html
 +++ b/h5/index.html
 @@ -68,14 +68,22 @@
@@ -169,7 +169,7 @@ index 5886641..9eed2b1 100644
        <p style="font-size:10.5px;color:#9aa6b2;margin-top:12px;line-height:1.6">
          提交后由 AI 客服先行为您解答；如需人工服务，在会话中回复「转人工」即可。
          涉及卡号、手机号等敏感信息会被系统自动脱敏。</p>
-@@ -126,22 +136,45 @@
+@@ -126,22 +136,49 @@
      </div>
    </div>
  
@@ -208,13 +208,14 @@ index 5886641..9eed2b1 100644
  const $ = s => document.querySelector(s);
  
 -// 伪 openid（与小程序同逻辑：本地生成、长期稳定；生产应 code2session 换取）
-+// openid 来自登录页（真实环境由 code2session 换取；此处沿用同一 key，未登录一律回登录页）
++// openid：优先用登录页写入的客户号；直接打开 /app 时给一个演示号（生产由 code2session 换取）
  let openid = localStorage.getItem('fb_openid');
--if (!openid) {
+ if (!openid) {
 -  openid = 'oPoc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
--  localStorage.setItem('fb_openid', openid);
--}
-+if (!openid) { location.replace('/'); }
++  openid = 'oPoc-13800138000';
+   localStorage.setItem('fb_openid', openid);
++  localStorage.setItem('fb_acct', '13800138000');
+ }
 +const acct = localStorage.getItem('fb_acct') || '';
  let fbList = JSON.parse(localStorage.getItem('fb_list') || '[]');
 -let curFb = null, curTicket = null, timer = null, rated = false, cat = 'OTHER';
@@ -222,7 +223,7 @@ index 5886641..9eed2b1 100644
  
  async function api(path, method='GET', data) {
    const opt = {method, headers:{'Content-Type':'application/json'}};
-@@ -170,6 +203,24 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.
+@@ -170,6 +207,24 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.
  // 提单页
  $('#cats').innerHTML = Object.entries(CAT).map(([k, v]) =>
    `<button data-k="${k}" class="${k === cat ? 'on' : ''}">${v}</button>`).join('');
@@ -247,7 +248,7 @@ index 5886641..9eed2b1 100644
  document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
    cat = b.dataset.k;
    document.querySelectorAll('#cats button').forEach(x => x.classList.toggle('on', x.dataset.k === cat));
-@@ -177,6 +228,7 @@ document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
+@@ -177,6 +232,7 @@ document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
  $('#txt').oninput = e => $('#n').textContent = e.target.value.length;
  $('#submit').onclick = async () => {
    const body = $('#txt').value.trim();
@@ -255,7 +256,7 @@ index 5886641..9eed2b1 100644
    if (!body) return toast('请填写反馈内容');
    const btn = $('#submit'); btn.disabled = true;
    try {
-@@ -185,7 +237,7 @@ $('#submit').onclick = async () => {
+@@ -185,7 +241,7 @@ $('#submit').onclick = async () => {
      if (!fbList.includes(d.fb_id)) { fbList.unshift(d.fb_id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
      toast(d.verdict === 'pass' ? '提交成功，AI 正在处理' : '已受理');
      openChat(d.fb_id);
@@ -264,7 +265,7 @@ index 5886641..9eed2b1 100644
    btn.disabled = false;
  };
  
-@@ -200,7 +252,7 @@ async function renderList() {
+@@ -200,7 +256,7 @@ async function renderList() {
        const d = await api('/feedback/api/v1/tickets/' + fb + '?openid=' + encodeURIComponent(openid));
        el.querySelector('.r1 span').outerHTML = chip(d.status);
        const last = (d.replies || []).slice(-1)[0];
@@ -273,7 +274,7 @@ index 5886641..9eed2b1 100644
        el.onclick = () => openChat(fb);
      } catch (e) {
        el.querySelector('.r1 span').outerHTML = chip('UNKNOWN');
-@@ -215,19 +267,38 @@ $('#qbtn').onclick = async () => {
+@@ -215,19 +271,38 @@ $('#qbtn').onclick = async () => {
      await api('/feedback/api/v1/tickets/' + id + '?openid=' + encodeURIComponent(openid));
      if (!fbList.includes(id)) { fbList.unshift(id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
      openChat(id);
@@ -316,7 +317,7 @@ index 5886641..9eed2b1 100644
    }).join('');
  }
  async function openChat(fb) {
-@@ -243,8 +314,39 @@ async function refreshChat() {
+@@ -243,8 +318,39 @@ async function refreshChat() {
      const d = await api('/feedback/api/v1/tickets/' + curFb + '?openid=' + encodeURIComponent(openid));
      curTicket = d;
      const closed = d.status === 'CLOSED_AI' || d.status === 'CLOSED_HUMAN';
@@ -359,83 +360,188 @@ index 5886641..9eed2b1 100644
      $('#rate').hidden = !(rated === false && (d.status === 'AI_ANSWERING' || closed));
 diff --git a/h5/login.html b/h5/login.html
 new file mode 100644
-index 0000000..fdc3785
+index 0000000..365b558
 --- /dev/null
 +++ b/h5/login.html
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,181 @@
 +<!DOCTYPE html>
 +<html lang="zh-CN">
 +<head>
-+<meta charset="utf-8">
-+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-+<title>登录 · 微光银行 · 客户服务</title>
++<meta charset="UTF-8">
++<meta name="viewport" content="width=device-width, initial-scale=1.0">
++<title>登录 · 银行客服 AI 工作台</title>
 +<style>
-+:root{--ink:#16243d;--ink2:#4a5a72;--ink3:#8b98ad;--line:#e3e9f0;--bg:#f2f5f9;--blue:#2f6df6;--yellow:#fff4d6;--yellowInk:#8a6d3b}
++:root{
++  --navy:#0e2f55; --navy-2:#173e6b; --navy-3:#0a2340;
++  --gold:#b8912f; --gold-2:#d3b25e;
++  --ink:#182230; --ink2:#455062; --ink3:#7c8698;
++  --line:#e3e7ee; --line2:#cbd2dd;
++  --bg:#f2f4f8; --panel:#fff; --panel2:#f6f8fb;
++  --red:#a32d2d; --red-bg:#fcebeb; --red-line:#f7c1c1;
++}
 +*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-+body{margin:0;background:var(--bg);color:var(--ink);
-+font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-+min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px}
-+.card{width:100%;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:16px;
-+box-shadow:0 10px 30px rgba(22,36,61,.06);overflow:hidden}
-+.hd{padding:26px 24px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#f8fbff,#fff)}
-+.brand{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink3);letter-spacing:.4px}
-+.logo{width:26px;height:26px;border-radius:8px;background:var(--ink);color:#fff;display:flex;
-+align-items:center;justify-content:center;font-size:14px;font-weight:700}
-+h1{margin:14px 0 4px;font-size:21px;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
-+.demo-tag{font-size:11px;font-weight:500;color:var(--yellowInk);background:var(--yellow);
-+border:1px solid #f2dfae;border-radius:999px;padding:1px 8px;letter-spacing:0}
-+.sub{margin:0;font-size:12.5px;color:var(--ink3)}
-+.bd{padding:22px 24px 10px}
-+.lbl{font-size:12.5px;color:var(--ink2);margin:0 0 7px;font-weight:600}
-+input{width:100%;height:46px;border:1px solid var(--line);border-radius:11px;padding:0 13px;
-+font-size:15px;color:var(--ink);background:#fbfdff;outline:none;transition:.15s}
-+input:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(47,109,246,.1)}
-+.hint{font-size:12px;color:var(--ink3);margin:8px 0 0;line-height:1.6}
-+.btn{width:100%;height:48px;border:none;border-radius:11px;background:var(--ink);color:#fff;
-+font-size:15.5px;font-weight:600;letter-spacing:.5px;cursor:pointer;margin-top:18px}
-+.btn:active{transform:translateY(1px)}
-+.btn.ghost{background:#fff;color:var(--ink2);border:1px solid var(--line);margin-top:10px;font-weight:500}
-+.err{color:#d9352b;font-size:12.5px;margin-top:10px;min-height:17px}
-+.ft{padding:16px 24px 20px;border-top:1px solid var(--line);background:#fcfdff;
-+font-size:11.5px;color:var(--ink3);line-height:1.75}
-+.ft b{color:var(--ink2);font-weight:600}
++body{margin:0;font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
++color:var(--ink);background:var(--bg)}
++button{font-family:inherit;cursor:pointer;border:none;background:none}
++input{font-family:inherit}
++.wrap{display:grid;grid-template-columns:minmax(320px,460px) 1fr;min-height:100vh}
++
++/* 左侧：品牌与分区说明（官网式深藏青，与内网登录页一致） */
++.side{background:linear-gradient(160deg,var(--navy-3) 0%,var(--navy) 48%,var(--navy-2) 100%);color:#dce6f2;
++padding:48px 44px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
++.side::before{content:"";position:absolute;inset:0;background:
++  radial-gradient(ellipse 60% 40% at 85% 10%,rgba(211,178,94,.13),transparent 60%),
++  radial-gradient(ellipse 50% 45% at 10% 95%,rgba(122,168,224,.12),transparent 65%);pointer-events:none}
++.side>*{position:relative}
++.side .lg{display:flex;align-items:center;gap:12px;margin-bottom:38px}
++.side .mark{width:36px;height:36px;border-radius:9px;background:linear-gradient(145deg,#1d4a85,#123563);
++border:1px solid rgba(211,178,94,.55);display:flex;align-items:center;justify-content:center;
++font-weight:700;font-size:17px;color:var(--gold-2)}
++.side h1{font-size:16px;font-weight:600;color:#fff;letter-spacing:.02em;line-height:1.3;margin:0}
++.side h1 small{display:block;font-size:11.5px;color:rgba(255,255,255,.55);font-weight:400;margin-top:3px;letter-spacing:.06em}
++.side .lead{font-size:13.5px;line-height:1.85;color:#b9cbdf;max-width:330px;border-left:2px solid var(--gold);padding-left:14px;margin:0}
++.zline{display:flex;align-items:center;gap:10px;margin-bottom:14px}
++.zline .zd{width:8px;height:8px;border-radius:50%;background:#3fbd85;flex:none;box-shadow:0 0 0 3px rgba(63,189,133,.18)}
++.zline .zd.b{background:#6fa6e0;box-shadow:0 0 0 3px rgba(111,166,224,.18)}
++.zline .zd.a{background:var(--gold-2);box-shadow:0 0 0 3px rgba(211,178,94,.2)}
++.zline .zt{font-size:12.5px;color:#d5e0ee}
++.zline .zt em{display:block;font-style:normal;font-size:11px;color:#8ba3bf;margin-top:1px}
++.side .foot{font-size:11px;color:#7f95b0;line-height:1.7;border-top:1px solid rgba(255,255,255,.12);padding-top:14px}
++
++/* 右侧：表单 */
++.formside{display:flex;align-items:center;justify-content:center;padding:40px 24px}
++.box{width:100%;max-width:376px}
++.switch{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px;margin-bottom:26px}
++.switch button{flex:1;padding:9px 8px;border-radius:7px;font-size:12.5px;color:var(--ink3);font-weight:500;transition:all .14s}
++.switch button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(20,20,15,.07)}
++.switch button:not(.on):hover{color:var(--ink2)}
++.box h2{font-size:19px;font-weight:600;letter-spacing:-.01em;margin:0 0 5px}
++.box .sub{font-size:12.5px;color:var(--ink3);margin:0 0 24px;line-height:1.6}
++.fld{margin-bottom:14px}
++.fld label{display:block;font-size:12px;color:var(--ink2);margin-bottom:6px;font-weight:500}
++.fld input{width:100%;padding:10px 12px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);
++color:var(--ink);outline:none;font-size:14px;transition:border-color .12s,box-shadow .12s}
++.fld input:focus{border-color:var(--navy-2);box-shadow:0 0 0 3px rgba(23,62,107,.1)}
++.submit{width:100%;padding:11px;border-radius:7px;background:linear-gradient(135deg,var(--navy),var(--navy-2));
++color:#fff;font-size:14px;font-weight:600;letter-spacing:.28em;margin-top:6px;transition:all .12s;
++box-shadow:0 2px 8px rgba(14,47,85,.28)}
++.submit:hover{filter:brightness(1.12);box-shadow:0 3px 12px rgba(14,47,85,.35)}
++.err{margin-top:14px;font-size:12.5px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-line);
++border-radius:7px;padding:9px 12px;display:none;line-height:1.55}
++.err.on{display:block}
++.note{font-size:11px;color:var(--ink3);margin-top:26px;border-top:1px solid var(--line);padding-top:14px;line-height:1.65}
++.demo-tag{font-size:11px;font-weight:500;color:#8a6d3b;background:#fff4d6;border:1px solid #f2dfae;
++border-radius:999px;padding:1px 8px;margin-left:8px;vertical-align:middle;letter-spacing:0}
++
++@media (max-width:820px){.wrap{grid-template-columns:1fr}.side{display:none}}
 +</style>
 +</head>
 +<body>
-+<div class="card">
-+  <div class="hd">
-+    <div class="brand"><span class="logo">光</span>微光银行 · 客户服务</div>
-+    <h1>客户登录<span class="demo-tag">演示环境</span></h1>
-+    <p class="sub">登录后可提交问题，由 AI 客服先行为您解答</p>
-+  </div>
-+  <div class="bd">
-+    <p class="lbl">手机号 / 客户号</p>
-+    <input id="acct" inputmode="numeric" autocomplete="off" placeholder="请输入手机号或客户号" value="13800138000">
-+    <p class="hint">演示账号已预填，直接点「登录」即可进入。此环境不校验真实身份，请勿填入真实客户信息。</p>
-+    <p class="err" id="err"></p>
-+    <button class="btn" id="go">登 录</button>
-+    <button class="btn ghost" id="emp">员工登录（坐席 / 管理控制台）</button>
-+    <p class="hint" style="margin-top:14px">两个入口在登录环节分流：客户账号进客户视图，员工工号进内网控制台。</p>
-+  </div>
-+  <div class="ft">
-+    <b>本页为演示环境，全部客户信息均为合成数据，不含任何真实客户资料</b><br>
-+    数据不出内网 · AI 只建议不裁决 · 全链路审计
-+  </div>
-+</div>
-+<script>
-+const $ = s => document.querySelector(s);
-+const EMP_URL = '/emp';   // 由网关转到内网登录页
-+function fail(m){ $('#err').textContent = m; }
++<div class="wrap">
++  <aside class="side">
++    <div>
++      <div class="lg">
++        <div class="mark">光</div>
++        <h1>银行客服 AI 工作台<small>内网可信域 · 统一身份入口</small></h1>
++      </div>
++      <p class="lead">AI 只提供建议，裁决权留在内网。所有客户数据在穿越边界前完成令牌化，复原须三元匹配。</p>
++    </div>
 +
-+$('#go').onclick = () => {
-+  const v = ($('#acct').value || '').trim();
-+  if (!/^\d{6,20}$/.test(v)) { fail('请输入 6-20 位数字的手机号或客户号'); return; }
-+  localStorage.setItem('fb_openid', 'oPoc-' + v);
-+  localStorage.setItem('fb_acct', v);
-+  location.href = '/app';
++    <div style="margin:34px 0">
++      <div class="zline"><span class="zd"></span><span class="zt">内网可信域<em>持有原始数据、规则引擎与身份权威</em></span></div>
++      <div class="zline"><span class="zd b"></span><span class="zt">DMZ 安全交换区<em>字段白名单、内容复检、签名换发</em></span></div>
++      <div class="zline"><span class="zd a"></span><span class="zt">外网 AI 协同域<em>只持有算力，不持有事实</em></span></div>
++    </div>
++
++    <div class="foot">
++      三个入口在登录环节分流：客户进客户视图，坐席账号进不了管理端，管理账号也进不了坐席端。<br>
++      PoC 演示环境 · 请勿使用真实客户信息
++    </div>
++  </aside>
++
++  <main class="formside">
++    <div class="box">
++      <div class="switch" id="switch">
++        <button data-portal="client" class="on">坐席工作台</button>
++        <button data-portal="admin">管理控制台</button>
++        <button data-portal="cust">客户体验</button>
++      </div>
++
++      <h2 id="ttl">登录坐席工作台<span class="demo-tag">演示环境</span></h2>
++      <p class="sub" id="sub">处理客户咨询，查看 AI 建议与边界对照报文。</p>
++
++      <form id="form" autocomplete="off">
++        <div class="fld">
++          <label for="u" id="ulbl">账号</label>
++          <input id="u" name="username" placeholder="工号账号，如 b001" autocomplete="username" required>
++        </div>
++        <div class="fld">
++          <label for="p" id="plbl">口令</label>
++          <input id="p" name="password" type="password" placeholder="请输入口令" autocomplete="current-password">
++        </div>
++        <button class="submit" id="go" type="submit">登 录</button>
++      </form>
++
++      <div class="err" id="err"></div>
++
++      <div class="note" id="note">账号由管理员统一发放，初始口令首次登录须修改。连续 5 次口令错误将锁定账号 300 秒，登录与越权事件全部进入审计。</div>
++    </div>
++  </main>
++</div>
++
++<script>
++const COPY = {
++  client:{t:'登录坐席工作台', s:'处理客户咨询，查看 AI 建议与边界对照报文。'},
++  admin: {t:'登录管理控制台', s:'查看工单与审计、管理账号会话、审批规则变更。'},
++  cust:  {t:'客户服务登录',   s:'登录后可提交问题，由 AI 客服先行为您解答。'},
 +};
-+$('#acct').addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); });
-+$('#emp').onclick = () => { location.href = EMP_URL; };
++const HOST = location.hostname;
++
++let portal = new URLSearchParams(location.search).get('portal');
++portal = ['client','admin','cust'].includes(portal) ? portal : 'client';
++
++const $ = s => document.querySelector(s);
++function paint(){
++  document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.dataset.portal === portal));
++  $('#ttl').innerHTML = COPY[portal].t + '<span class="demo-tag">演示环境</span>';
++  $('#sub').textContent = COPY[portal].s;
++  const cust = portal === 'cust';
++  $('#ulbl').textContent = cust ? '手机号 / 客户号' : '账号';
++  $('#u').placeholder = cust ? '演示号已预填，可直接登录' : '工号账号，如 b001';
++  $('#u').value = cust ? '13800138000' : '';
++  $('#p').placeholder = cust ? '演示环境不校验口令' : '请输入口令';
++  $('#p').required = !cust;
++  $('#p').type = cust ? 'text' : 'password';
++  $('#p').value = cust ? '' : '';
++  $('#p').parentElement.style.display = cust ? 'none' : '';
++  $('#note').innerHTML = cust
++    ? '本页为演示环境，全部客户信息均为合成数据，不含任何真实客户资料。'
++    : '账号由管理员统一发放，初始口令首次登录须修改。连续 5 次口令错误将锁定账号 300 秒，登录与越权事件全部进入审计。';
++}
++document.querySelectorAll('#switch button').forEach(b => b.onclick = () => {
++  portal = b.dataset.portal;
++  history.replaceState(null, '', portal === 'client' ? '/' : '/?portal=' + portal);
++  $('#err').classList.remove('on');
++  paint();
++});
++paint();
++
++function showErr(m){ const e = $('#err'); e.textContent = m; e.classList.add('on'); }
++
++$('#form').onsubmit = (e) => {
++  e.preventDefault();
++  const v = $('#u').value.trim();
++  if (portal === 'cust') {
++    if (!/^\d{6,20}$/.test(v)) return showErr('请输入 6-20 位数字的手机号或客户号');
++    localStorage.setItem('fb_openid', 'oPoc-' + v);
++    localStorage.setItem('fb_acct', v);
++    location.href = '/app';
++    return;
++  }
++  if (!v || !$('#p').value) return showErr('请填写账号与口令');
++  // 员工入口：直接跳内网控制台登录页（同一台机器 19096），由那一侧完成身份校验
++  location.href = `http://${HOST}:19096/login?portal=${portal}&u=${encodeURIComponent(v)}`;
++};
 +</script>
 +</body>
 +</html>
@@ -714,7 +820,7 @@ index 2a97d3e..49aa6e3 100644
          _persist(request_id, status="HUMAN_HANDOFF")
          return _result(request_id)
 diff --git a/outer/app.py b/outer/app.py
-index 09602fc..02fbf3b 100644
+index 09602fc..e2a3cfe 100644
 --- a/outer/app.py
 +++ b/outer/app.py
 @@ -18,7 +18,7 @@ from typing import Iterator
@@ -739,7 +845,7 @@ index 09602fc..02fbf3b 100644
  
  @app.get("/", include_in_schema=False)
 +def demo_login() -> FileResponse:
-+    """客户登录页（对外入口即登录，与手机银行已登录状态一致）。
++    """对外入口即登录页（与内网登录页同一套视觉与文案，另加「客户体验」入口）。
 +
 +    no-store：演示期间页面会被反复更新，禁掉缓存，避免客户看到上一次的旧页面。
 +    """
@@ -1480,7 +1586,7 @@ index d3a629c..2a7ecdf 100644
  }
  
 diff --git a/web/login.html b/web/login.html
-index 1d3e8ca..188afdd 100644
+index 1d3e8ca..34629e9 100644
 --- a/web/login.html
 +++ b/web/login.html
 @@ -4,7 +4,7 @@
@@ -1492,6 +1598,50 @@ index 1d3e8ca..188afdd 100644
  <style>
  body{background:var(--bg)}
  .wrap{display:grid;grid-template-columns:minmax(320px,460px) 1fr;min-height:100vh}
+@@ -48,6 +48,9 @@ body{background:var(--bg)}
+ .err.on{display:block}
+ 
+ .note{font-size:11px;color:var(--ink3);margin-top:26px;border-top:1px solid var(--line);padding-top:14px;line-height:1.65}
++.cust{display:block;margin-top:14px;padding:10px 12px;text-align:center;font-size:12.5px;color:var(--navy-2);
++background:var(--panel2);border:1px solid var(--line);border-radius:7px;text-decoration:none;transition:.12s}
++.cust:hover{border-color:var(--navy-2);color:var(--navy)}
+ 
+ @media (max-width:820px){.wrap{grid-template-columns:1fr}.side{display:none}}
+ </style>
+@@ -100,6 +103,8 @@ body{background:var(--bg)}
+       <div class="err" id="err"></div>
+ 
+       <div class="note">账号由管理员统一发放，初始口令首次登录须修改。连续 5 次口令错误将锁定账号 300 秒，登录与越权事件全部进入审计。</div>
++
++      <a class="cust" id="custLink" href="#">客户体验入口（外部客户视角）→</a>
+     </div>
+   </main>
+ </div>
+@@ -112,6 +117,11 @@ const COPY = {
+ };
+ 
+ let portal = new URLSearchParams(location.search).get('portal') === 'admin' ? 'admin' : 'client';
++// 从对外入口跳过来时带 ?u=，预填工号（口令仍需手输）
++(function () {
++  const u = new URLSearchParams(location.search).get('u');
++  if (u) document.getElementById('u').value = u;
++})();
+ 
+ function paint() {
+   document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.dataset.portal === portal));
+@@ -129,6 +139,12 @@ paint();
+ const err = document.getElementById('err');
+ function showErr(msg) { err.textContent = msg; err.classList.add('on'); }
+ 
++// 客户体验入口：外部客户视角在 19094（同一台机器，另一个端口）
++(function () {
++  const a = document.getElementById('custLink');
++  if (a) a.href = `http://${location.hostname}:19094/app`;
++})();
++
+ // 掉线原因提示：工作台 401 跳回时携带 ?reason=expire（含被其他设备顶下线的情况）
+ (function () {
+   const reason = new URLSearchParams(location.search).get('reason');
 diff --git a/web/password.html b/web/password.html
 index b283160..0922cd0 100644
 --- a/web/password.html
