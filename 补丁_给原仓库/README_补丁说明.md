@@ -54,14 +54,14 @@
 
 | 项 | 打补丁前 | 打补丁后 |
 |---|---|---|
-| pytest | 90 passed | **104 passed** |
+| pytest | 90 passed | **119 passed** |
 | 12 例验收 | **8/12**（C 组 0/4） | **12/12** |
 | C01 证件号 | RESTORED | **BLOCKED / PRIVACY_ID_NUMBER** |
 | C02 回拨回访 | RESTORED | **HUMAN_HANDOFF / CALLBACK_REQUIRES_AUTH** |
 | C03 fault=timeout | RESTORED | **TIMEOUT / UPSTREAM_UNAVAILABLE** |
 | C04 fault=bad_json | RESTORED | **REJECTED / SCHEMA_INVALID** |
 | 并发 5 / 10 | — | **100% / 100%**（P90 2.05s / 4.02s） |
-| 干净应用验证 | — | `git archive HEAD` 出 pristine 树 → `git apply --check` 通过 → apply → **104 passed** |
+| 干净应用验证 | — | `git archive HEAD` 出 pristine 树 → `git apply --check` 通过 → apply → **119 passed** |
 
 ---
 
@@ -79,7 +79,7 @@
 ```bash
 git checkout -b fix/case-fault-and-privacy
 git apply 0001-optimal-fault-privacy-customer-risk.patch
-python -m pytest -q                                        # 期望 104 passed
+python -m pytest -q                                        # 期望 119 passed
 # 起三区后：
 python tools/run_cases.py --base http://127.0.0.1:8101      # 期望 12/12
 python tools/wb_loadtest.py --base http://127.0.0.1:8101 --path case --n 20 --c 10
@@ -120,7 +120,7 @@ python tools/wb_loadtest.py --base http://127.0.0.1:8101 --path case --n 20 --c 
 - 变更：**6 文件 +243/-4**（3 源文件 + 3 测试文件）
 - 状态：`open`，`mergeable: true`
 
-他只需要：**Review → Merge**。合并后本地 `git pull`，跑 `python -m pytest -q`（期望 104 passed）与 `tools/run_cases.py`（期望 12/12）。
+他只需要：**Review → Merge**。合并后本地 `git pull`，跑 `python -m pytest -q`（期望 119 passed）与 `tools/run_cases.py`（期望 12/12）。
 
 
 ---
@@ -177,7 +177,7 @@ schema 校验失败 → 退化成"转人工"，客户看到的是"已转接人�
 
 ## 十、2026-11-20 追加：把你点名的四条全部补掉
 
-PR 现在共 **12 个文件**（7 源 + 5 测试），三个 commit。下面每条都给了实测。
+PR 现在共 **15 个文件**（8 源 + 7 测试），三个 commit。下面每条都给了实测。
 
 ### 10.1 客户多轮意图（原：客户只回"嗯/对"就掉回通用话术）
 
@@ -241,11 +241,29 @@ dmz 容器连 inner:8101     → 成功 ✅（唯一咽喉）
 
 | 项 | 结果 |
 |---|---|
-| pytest | **110 passed**（原有 90 + 新增 20） |
+| pytest | **119 passed**（原有 90 + 新增 29） |
 | 12 例验收 | **12/12**（公网 19096 与 compose 栈 8101 双环境） |
-| T01–T20 | 通过 19、部分 1（T04 上下文最小化只做白名单）、不适用 0 |
+| T01–T20 | 通过 20、部分 0、不适用 0 |
 | 客户多轮 | "嗯" 继承上一轮意图 |
 | 客户延迟 | 4.6–5.9 秒（真模型） |
 | T03 / T12 | 已实证（见上） |
 
 **仍未做**：正式盲测（需其他组现场抽）+ 组内真人签字。这两条本来就不在我这边。
+
+### 10.6 T10 冲突以内网为准（原：转人工了，动作码还写着"收集更多信息"）
+
+- `inner/rules.py` `evaluate()` 末尾新增第 ⑧ 条：判定 `HUMAN_HANDOFF` 且命中
+  `MANDATORY_HUMAN / RULE_ACTION_CONFLICT / INVALID_RULE_REFERENCE / PROHIBITED_CLAIM / INVALID_ACTION_CODE`
+  之一时，返回 `action_override = "HUMAN_REVIEW"`，并补 reason `ACTION_OVERRIDDEN_BY_RULE`。
+- `inner/service.py` ⑩.5：落库前用 override 覆盖模型给的动作码，写 `ACTION_OVERRIDDEN` 审计（谁改的、从什么改成什么）。
+
+**为什么这么改**：B04 本来就转人工，但动作码是 `COLLECT_MORE_INFO`——坐席看到会去"再多问几句"，
+而正确动作是交人工研判。这就是"外部建议与内网规则冲突，以内网为准"的落地，且改的是动作码，不是模型输出本身。
+
+**实测**（服务器 18401，真模型）：
+```
+B04 → HUMAN_HANDOFF | next: HUMAN_REVIEW | reasons: ACTION_OVERRIDDEN_BY_RULE, AGENT_REQUESTED_HUMAN, INVALID_RULE_REFERENCE, MANDATORY_HUMAN
+B03 → HUMAN_HANDOFF | next: HUMAN_REVIEW | 同上
+A01 → RESTORED       | next: REQUEST_DISPUTE_FORM | reasons: []      （放行场景不受影响）
+12 例：12/12；pytest：119 passed（新增 tests/test_t10_rule_precedence.py 4 项）
+```
