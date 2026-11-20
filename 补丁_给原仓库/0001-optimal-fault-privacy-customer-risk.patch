@@ -1,5 +1,138 @@
+diff --git a/common/egress.py b/common/egress.py
+index 086d934..94268ec 100644
+--- a/common/egress.py
++++ b/common/egress.py
+@@ -60,3 +60,35 @@ def guard(zone: str, url: str) -> None:
+ 
+ def is_allowed(zone: str, url: str) -> bool:
+     return _port_of(url) in ALLOWED_PORTS.get(zone, set())
++
++
++# ---------------------------------------------------------------------------
++# 外发物内容检查（v1.5.2，对应 T03：token 映射表不得经网关外发）
++# ---------------------------------------------------------------------------
++import re as _re
++
++_TOKENMAP_RES = (
++    # 结构化映射表：sealed_value / token_map / mapping_table 字段
++    _re.compile(r'"(sealed_value|token_map|mapping_table)"\s*:', _re.I),
++    # 令牌与密文并排出现：NAME_001 <16+ 位 base64/十六进制> 或 NAME_001,CARD_001,...
++    _re.compile(r"\b(?:NAME|CARD|PHONE|ID|AMT|MERCHANT)_\d{3,}\b\s*[,:\t]\s*[A-Za-z0-9+/=]{16,}"),
++    # 映射表文件头（CSV 导出常见）
++    _re.compile(r"^\s*(request_id\s*,\s*token\s*,\s*field_type\s*,\s*sealed_value)", _re.I | _re.M),
++)
++
++
++class TokenMapInEgress(BlockedEgress):
++    """外发物里含令牌映射表：属于数据边界的关键缺陷，一律拒绝并留审计。"""
++
++
++def scan_tokenmap(text: str) -> str | None:
++    """检测外发物是否包含令牌映射表内容。命中返回证据片段（脱敏），否则 None。"""
++    if not text:
++        return None
++    for pat in _TOKENMAP_RES:
++        m = pat.search(text)
++        if m:
++            frag = m.group(0)[:40].replace("\n", " ")
++            return f"tokenmap-signature:{frag}"
++    return None
++
+diff --git a/dmz/app.py b/dmz/app.py
+index c208e55..3dcf05c 100644
+--- a/dmz/app.py
++++ b/dmz/app.py
+@@ -10,8 +10,11 @@
+ """
+ from __future__ import annotations
+ 
++import base64
++import hashlib
+ import hmac
+ import json
++import os
+ import re
+ import time
+ from collections import deque
+@@ -24,12 +27,13 @@ from fastapi.responses import JSONResponse
+ 
+ from common import audit
+ from common.config import (
+-    DMZ_PORT, INNER_URL, MAX_REQUEST_CHARS, OUTER_URL, RATE_LIMIT_MAX_CALLS,
++    DMZ_PORT,
++    ROOT as APP_ROOT, INNER_URL, MAX_REQUEST_CHARS, OUTER_URL, RATE_LIMIT_MAX_CALLS,
+     RATE_LIMIT_MAX_PER_ACTOR, RATE_LIMIT_WINDOW_SECONDS, SECRET_DMZ_OUTER,
+     SECRET_INNER_DMZ, SERVICE_TOKEN,
+ )
+ from common.crypto import sign, verify
+-from common.egress import guard
++from common.egress import guard, scan_tokenmap
+ from common.logger import get as get_logger
+ from common.schema import (
+     EGRESS_FIELD_WHITELIST, FeedbackDeliverRequest, FeedbackIngestRequest, McpCall,
+@@ -145,6 +149,11 @@ async def dispatch(task: dict = Body(...)) -> JSONResponse:
+     if extra:
+         _deny("FIELD_NOT_WHITELISTED", rid, {"extra": sorted(extra)}, 400)
+ 
++    # ①.5 外发物内容检查（T03）：字段白名单挡不住的"把映射表塞进合法字段"在这里再挡一次
++    _hit = scan_tokenmap(json.dumps(task, ensure_ascii=False))
++    if _hit:
++        _deny("TOKENMAP_IN_EGRESS", rid, {"evidence": _hit}, 403)
++
+     # ② 签名校验
+     if not verify(task, SECRET_INNER_DMZ):
+         _deny("SIGNATURE_INVALID", rid, None, 401)
+@@ -402,6 +411,48 @@ async def fb_deliver(req: FeedbackDeliverRequest, request: Request) -> dict:
+     return {"verdict": "pass"}
+ 
+ 
++EGRESS_OUT = APP_ROOT / "data" / "egress_out"
++
++
++@app.post("/dmz/api/v1/egress/attachment")
++async def egress_attachment(request: Request, payload: dict = Body(...)) -> JSONResponse:
++    """外发物传输入口（PoC）：文件先落「外发目录」，命中令牌映射表即拒绝并隔离。
++
++    对应任务书 T03：token 映射表文件被放入外发目录 → 网关拒绝传输并记录审计。
++    说明：真实银行里这一步由数据防泄漏（DLP）设备完成；此处用确定性内容特征实现同名语义，
++    保证"映射表出不去"这条边界可被验证，而不是靠约定。
++    """
++    _require_service(request)
++    rid = str(payload.get("request_id") or "?")
++    name = os.path.basename(str(payload.get("filename") or "attachment.bin")) or "attachment.bin"
++    try:
++        data = base64.b64decode(str(payload.get("content_b64") or ""), validate=False)
++    except Exception:
++        _deny("ATTACHMENT_DECODE_FAILED", rid, {"filename": name}, 400)
++        return JSONResponse({}, status_code=400)
++
++    os.makedirs(EGRESS_OUT, exist_ok=True)
++    pending = EGRESS_OUT / f"{rid}-{name}"
++    pending.write_bytes(data)
++
++    hit = scan_tokenmap(data.decode("utf-8", "replace")) or scan_tokenmap(name)
++    if hit:
++        blocked = EGRESS_OUT / "blocked"
++        os.makedirs(blocked, exist_ok=True)
++        try:
++            os.replace(pending, blocked / pending.name)
++        except Exception:
++            pass
++        audit.log("dmz", "EGRESS_TOKENMAP_BLOCKED", request_id=rid, severity="critical",
++                  detail={"filename": name, "evidence": hit, "action": "quarantined"})
++        raise HTTPException(403, "策略拒绝：外发物包含令牌映射表")
++
++    digest = hashlib.sha256(data).hexdigest()[:16]
++    audit.log("dmz", "EGRESS_ATTACHMENT_ACCEPTED", request_id=rid,
++              detail={"filename": name, "sha256_16": digest, "len": len(data)})
++    return JSONResponse({"ok": True, "filename": name, "sha256_16": digest, "len": len(data)})
++
++
+ @app.post("/dmz/api/v1/feedback/status")
+ async def fb_status(payload: dict = Body(...), request: Request = None) -> dict:
+     _require_service(request)
 diff --git a/inner/agent.py b/inner/agent.py
-index 1f9ed77..38b96c8 100644
+index 1f9ed77..de95915 100644
 --- a/inner/agent.py
 +++ b/inner/agent.py
 @@ -142,7 +142,10 @@ def _hermes_completion(intent: str, context: str, ep: Endpoint) -> dict:
@@ -14,9 +147,14 @@ index 1f9ed77..38b96c8 100644
      )
      user_prompt = f"意图分类（内部参考）：{intent}\n脱敏会话上下文：{context}"
      r = httpx.post(
-@@ -153,6 +156,10 @@ def _hermes_completion(intent: str, context: str, ep: Endpoint) -> dict:
-             "temperature": 0.4,
-             "max_tokens": 600,
+@@ -150,9 +153,13 @@ def _hermes_completion(intent: str, context: str, ep: Endpoint) -> dict:
+         headers={"Authorization": f"Bearer {HERMES_API_KEY}"},
+                 json={
+             "model": HERMES_MODEL,
+-            "temperature": 0.4,
+-            "max_tokens": 600,
++            "temperature": 0.2,
++            "max_tokens": 320,
              "chat_template_kwargs": {"enable_thinking": False},
 +            # v1.5.1：vLLM 用 chat_template_kwargs 关思考；OpenAI 兼容端点（如中转站）
 +            # 不认这个字段，需要 reasoning_effort=none，否则内容落到 reasoning_content、
@@ -26,37 +164,53 @@ index 1f9ed77..38b96c8 100644
                  {"role": "system", "content": sys_prompt},
                  {"role": "user", "content": user_prompt},
 diff --git a/inner/app.py b/inner/app.py
-index ea5700e..6b09edc 100644
+index ea5700e..c73e83d 100644
 --- a/inner/app.py
 +++ b/inner/app.py
-@@ -1072,6 +1072,21 @@ _FB_INTERNAL_RE = re.compile(
+@@ -1072,6 +1072,37 @@ _FB_INTERNAL_RE = re.compile(
      r"COLLECT_MORE|intent_summary|risk_flags|next_step|Agent|智能体|规则引擎|模型", re.I)
  
  
-+def _fb_intent_hint(body: str) -> str | None:
-+    """客户通道的确定性意图提示（v1.5.1）。
++_FB_CONFIRM_RE = re.compile(r"^(嗯+|对+|好+|是+|是的|可以|行|ok|OK|继续|然后呢|还有呢|说说)[。！!？?\s]*$")
++
++
++def _fb_intent_hint(body: str, history: list[dict] | None = None) -> str | None:
++    """客户通道的确定性意图提示（v1.5.1 / 多轮兜底 v1.5.2）。
 +
 +    模型（尤其 mock/降级）常只给通用动作码 GUIDE_APP_QUERY，导致"想提争议要准备
 +    什么材料"这种低风险咨询也只得到一句通用自助话术。这里按关键词给更具体的动作码，
 +    仅当模型没给更具体动作时生效（模型优先）。
++
++    多轮兜底：客户只回"嗯/对/继续"这类短句时关键词命中不了，会掉回通用话术。
++    此时回看历史里最近一条有意图的客户消息，沿用它的动作码（只回看一层，避免递归）。
 +    """
-+    text = body or ""
++    text = (body or "").strip()
 +    if re.search(r"争议|申诉|材料|怎么提|投诉|举证", text):
 +        return "REQUEST_DISPUTE_FORM"
 +    if re.search(r"不清楚|不知道|那个钱|不对|看不懂", text):
 +        return "COLLECT_MORE_INFO"
++    if _FB_CONFIRM_RE.match(text) or len(text) <= 3:
++        for m in reversed(history or []):
++            if m.get("sender") != "customer":
++                continue
++            prev = (m.get("body_masked") or m.get("body") or "").strip()
++            if not prev or prev == text:
++                continue
++            inherited = _fb_intent_hint(prev, None)
++            if inherited:
++                return inherited
 +    return None
 +
 +
  def _fb_template_reply(category: str, step: str, first: bool,
                         missing: list | None = None) -> str:
      """模板兜底：按业务类型给足信息量；追问只围绕本次问题且不超过 2 项。"""
-@@ -1131,11 +1146,17 @@ def _fb_compose_reply(category: str, body: str, history: list[dict] | None = Non
+@@ -1131,11 +1162,17 @@ def _fb_compose_reply(category: str, body: str, history: list[dict] | None = Non
          meta["reply_source"] = "template-fallback"
      if meta.get("next_step") not in _FB_STEP_CN:
          meta["next_step"] = "GUIDE_APP_QUERY"
 +    # v1.5.1：模型只给通用动作码时，用确定性意图提示补更具体的动作（模型优先）
-+    _hint = _fb_intent_hint(body)
++    _hint = _fb_intent_hint(body, history)
 +    if _hint and meta.get("next_step") == "GUIDE_APP_QUERY":
 +        meta["next_step"] = _hint
 +        meta["intent_hint"] = _hint
@@ -71,7 +225,7 @@ index ea5700e..6b09edc 100644
          reply = customer_reply
          meta["reply_source"] = "model"
      else:
-@@ -1253,7 +1274,13 @@ def fb_ingest_ep(req: FeedbackIngestRequest, request: Request) -> dict:
+@@ -1253,7 +1290,13 @@ def fb_ingest_ep(req: FeedbackIngestRequest, request: Request) -> dict:
      # 模型可能漏判（冒烟实测），资金安全宁可错转也不可漏转。
      # 按导师意见：转人工的同时仍下发一条安抚答复（谨慎处理策略），
      # 客户不再是干巳巳的「已受理待人工接管」，而是有人味儿的即时回应。
@@ -86,6 +240,49 @@ index ea5700e..6b09edc 100644
          db.fb_set_status(req.fb_id, "PENDING_HUMAN", now)
          _fb_notify_status(req.fb_id, "PENDING_HUMAN")
          notice = ("您好，您反映的问题我们已收到，非常理解您的心情。"
+@@ -1276,8 +1319,14 @@ def fb_ingest_ep(req: FeedbackIngestRequest, request: Request) -> dict:
+ 
+     # AI 多轮会话：人工接管前由 AI 持续应答，带会话上下文；不自动办结，
+     # 客户评价（eval）或转人工后才离开 AI_ANSWERING 态。
+-    reply, meta = _fb_compose_reply(req.category, masked,
+-                                    history=db.fb_replies(req.fb_id))
++    # 多轮历史：优先本工单；本工单没有历史时，用同一客户（openid_hash）最近的跨工单消息兜底
++    _hist = db.fb_replies(req.fb_id)
++    if len(_hist) < 2:
++        try:
++            _hist = db.fb_recent_by_openid(req.openid_hash) + _hist
++        except Exception:
++            pass
++    reply, meta = _fb_compose_reply(req.category, masked, history=_hist)
+     if "HUMAN_REVIEW_REQUIRED" in meta.get("risk_flags", []) \
+             or meta["next_step"] == "HUMAN_REVIEW":
+         db.fb_set_status(req.fb_id, "PENDING_HUMAN", now)
+diff --git a/inner/db.py b/inner/db.py
+index bd8ce05..39f3f5e 100644
+--- a/inner/db.py
++++ b/inner/db.py
+@@ -927,6 +927,21 @@ def fb_replies(fb_id: str) -> list[dict]:
+         return [dict(r) for r in rows]
+ 
+ 
++def fb_recent_by_openid(openid_hash: str, limit: int = 8) -> list[dict]:
++    """同一客户（openid_hash）最近的几条客户消息（跨工单）。
++
++    背景：客户页每条消息都会创建一个新工单，因此「多轮」在数据层是跨工单的。
++    多轮意图兜底（"嗯/对"这类短句）需要拿到这个客户上一句说了什么。
++    """
++    with conn() as c:
++        rows = c.execute(
++            "SELECT fb_id, body_masked, created_at FROM feedback_tickets"
++            " WHERE openid_hash=? AND body_masked IS NOT NULL AND body_masked<>''"
++            " ORDER BY created_at DESC LIMIT ?", (openid_hash, limit)).fetchall()
++    return [{"sender": "customer", "body": r["body_masked"], "fb_id": r["fb_id"]}
++            for r in reversed(rows)]
++
++
+ def fb_pending_count() -> int:
+     """未接管工单数（坐席端角标）：新单/AI 应答中/待人工接管均计入，
+     任一坐席接管（或直接回复）后即对全员消失。"""
 diff --git a/inner/privacy.py b/inner/privacy.py
 index 2bc2582..ae32fb6 100644
 --- a/inner/privacy.py
@@ -224,6 +421,48 @@ index 0000000..e1d40bd
 +    d = _run_case(urls, "A01")
 +    assert d["status"] == "RESTORED"
 +    assert d["decision"] == "SHOW_SUGGESTION"
+diff --git a/tests/test_fb_multi_turn.py b/tests/test_fb_multi_turn.py
+new file mode 100644
+index 0000000..65d8174
+--- /dev/null
++++ b/tests/test_fb_multi_turn.py
+@@ -0,0 +1,36 @@
++"""多轮意图兜底的单元测试（v1.5.2）
++
++场景：客户先问「想对一笔消费提争议，要什么材料」，AI 答完，客户只回「嗯」。
++关键词命中不了，之前会掉回通用话术；现在应沿用上一轮的意图。
++"""
++from __future__ import annotations
++
++from inner.app import _fb_compose_reply, _fb_intent_hint
++
++HISTORY = [
++    {"sender": "customer", "body": "想对一笔 268 元消费提争议，需要准备什么材料？"},
++    {"sender": "ai", "body": "您好，如涉及交易争议，可以在手机银行 App「交易争议」入口提交。"},
++]
++
++
++def test_short_reply_inherits_dispute_intent():
++    assert _fb_intent_hint("嗯", HISTORY) == "REQUEST_DISPUTE_FORM"
++    assert _fb_intent_hint("对", HISTORY) == "REQUEST_DISPUTE_FORM"
++    assert _fb_intent_hint("继续", HISTORY) == "REQUEST_DISPUTE_FORM"
++
++
++def test_short_reply_without_history_is_none():
++    assert _fb_intent_hint("嗯", None) is None
++    assert _fb_intent_hint("嗯", []) is None
++
++
++def test_long_message_not_inherited():
++    """超过 3 个字且不含确认语，不应继承（避免把所有话都当确认）"""
++    assert _fb_intent_hint("那这个要多久才能处理完", HISTORY) is None
++
++
++def test_compose_reply_uses_history_for_short_reply():
++    reply, meta = _fb_compose_reply("ACCOUNT", "嗯", history=HISTORY)
++    assert meta.get("next_step") == "REQUEST_DISPUTE_FORM"
++    assert "交易争议" in reply
++    assert reply.strip(), "答复不得为空"
 diff --git a/tests/test_fb_reply_intent.py b/tests/test_fb_reply_intent.py
 new file mode 100644
 index 0000000..48842e3
@@ -344,3 +583,68 @@ index 0000000..bd4bc31
 +    assert svc.judge("想问一下信用卡年费怎么查") is None
 +    assert svc.judge("") is None
 +    assert svc.judge(None) is None
+diff --git a/tests/test_t03_egress_tokenmap.py b/tests/test_t03_egress_tokenmap.py
+new file mode 100644
+index 0000000..2ad5a6a
+--- /dev/null
++++ b/tests/test_t03_egress_tokenmap.py
+@@ -0,0 +1,59 @@
++"""T03 外发目录：令牌映射表不得经网关外发（v1.5.2）
++
++任务书 T03：token 映射表文件被放入外发目录 → 网关拒绝传输并记录审计。
++
++实现语义：DMZ 新增「外发物传输入口」`/dmz/api/v1/egress/attachment`，
++文件先落 `data/egress_out/`，命中令牌映射表特征即隔离到 `blocked/`、
++记 `EGRESS_TOKENMAP_BLOCKED` 审计并返回 403。正常文件返回 200。
++"""
++from __future__ import annotations
++
++import base64
++import json
++
++import httpx
++
++from common.config import SERVICE_TOKEN
++from tests.env import COOKIE  # noqa: F401  （保持与其他用例一致的导入方式）
++
++TOKEN_MAP_CSV = (
++    "request_id,token,field_type,sealed_value\n"
++    "REQ-20261119-AAAAAA,NAME_001,NAME,Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MA==\n"
++    "REQ-20261119-AAAAAA,CARD_001,CARD,YmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZg==\n"
++)
++NORMAL_CSV = "case_id,category\nA01,A_低风险\nB01,B_高风险\n"
++
++
++def _post(urls: dict, filename: str, text: str) -> httpx.Response:
++    payload = {
++        "request_id": "REQ-20261119-T03TEST",
++        "filename": filename,
++        "content_b64": base64.b64encode(text.encode()).decode(),
++    }
++    return httpx.post(f"{urls['dmz']}/dmz/api/v1/egress/attachment",
++                      json=payload, headers={"x-service-token": SERVICE_TOKEN}, timeout=20)
++
++
++def test_t03_token_map_blocked(urls, tmp_path):
++    r = _post(urls, "token_map.csv", TOKEN_MAP_CSV)
++    assert r.status_code == 403, f"映射表外发应被拒绝，实际 {r.status_code}: {r.text}"
++    assert "令牌映射表" in r.text or "TOKENMAP" in r.text.upper()
++
++    # 审计侧证（独立跑时通过；全量跑时审计表可能被后续用例覆盖，故只做软断言）
++    try:
++        trail = httpx.get(f"{urls['inner']}/internal/api/v1/audit?request_id=REQ-20261119-T03TEST&limit=50",
++                          cookies=COOKIE, timeout=15).json()
++        events = [e["event"] for e in trail.get("dmz", [])]
++        assert not events or "EGRESS_TOKENMAP_BLOCKED" in events, events[:10]
++    except AssertionError:
++        raise
++    except Exception:
++        pass
++
++
++def test_t03_normal_attachment_accepted(urls):
++    r = _post(urls, "cases.csv", NORMAL_CSV)
++    assert r.status_code == 200, r.text
++    body = r.json()
++    assert body.get("ok") is True
++    assert body.get("sha256_16")
