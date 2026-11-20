@@ -132,7 +132,7 @@ index c208e55..3dcf05c 100644
  async def fb_status(payload: dict = Body(...), request: Request = None) -> dict:
      _require_service(request)
 diff --git a/h5/index.html b/h5/index.html
-index 5886641..bdfea00 100644
+index 5886641..9eed2b1 100644
 --- a/h5/index.html
 +++ b/h5/index.html
 @@ -68,14 +68,22 @@
@@ -169,14 +169,24 @@ index 5886641..bdfea00 100644
        <p style="font-size:10.5px;color:#9aa6b2;margin-top:12px;line-height:1.6">
          提交后由 AI 客服先行为您解答；如需人工服务，在会话中回复「转人工」即可。
          涉及卡号、手机号等敏感信息会被系统自动脱敏。</p>
-@@ -126,12 +136,27 @@
+@@ -126,22 +136,45 @@
      </div>
    </div>
  
 +<div class="foot">
 +  本页为演示环境，全部客户信息均为合成数据，不含任何真实客户资料<br>
-+  数据不出内网 · AI 只建议不裁决 · 全链路审计
++  数据不出内网 · AI 只建议不裁决 · 全链路审计<br>
++  <span id="who"></span> · <a href="#" id="logout" style="color:#2f6df6;text-decoration:none">退出登录</a>
 +</div>
++<script>
++  (function(){
++    const a = localStorage.getItem('fb_acct') || '';
++    const who = document.getElementById('who');
++    if (who) who.textContent = a ? ('当前客户 ' + a.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')) : '';
++    const lo = document.getElementById('logout');
++    if (lo) lo.onclick = (e) => { e.preventDefault(); localStorage.removeItem('fb_openid'); localStorage.removeItem('fb_acct'); location.replace('/'); };
++  })();
++</script>
  <div class="toast" id="toast"></div>
  </div>
  <script>
@@ -197,17 +207,22 @@ index 5886641..bdfea00 100644
 +  PENDING_HUMAN:'已转人工跟进', HUMAN_ANSWERING:'人工处理中', CLOSED_HUMAN:'已办结', UNKNOWN:'查询失败'};
  const $ = s => document.querySelector(s);
  
- // 伪 openid（与小程序同逻辑：本地生成、长期稳定；生产应 code2session 换取）
-@@ -141,7 +166,7 @@ if (!openid) {
-   localStorage.setItem('fb_openid', openid);
- }
+-// 伪 openid（与小程序同逻辑：本地生成、长期稳定；生产应 code2session 换取）
++// openid 来自登录页（真实环境由 code2session 换取；此处沿用同一 key，未登录一律回登录页）
+ let openid = localStorage.getItem('fb_openid');
+-if (!openid) {
+-  openid = 'oPoc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+-  localStorage.setItem('fb_openid', openid);
+-}
++if (!openid) { location.replace('/'); }
++const acct = localStorage.getItem('fb_acct') || '';
  let fbList = JSON.parse(localStorage.getItem('fb_list') || '[]');
 -let curFb = null, curTicket = null, timer = null, rated = false, cat = 'OTHER';
 +let curFb = null, curTicket = null, timer = null, rated = false, cat = 'ACCOUNT', lastBody = '', lastCat = 'ACCOUNT';
  
  async function api(path, method='GET', data) {
    const opt = {method, headers:{'Content-Type':'application/json'}};
-@@ -170,6 +195,24 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.
+@@ -170,6 +203,24 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => show(b.
  // 提单页
  $('#cats').innerHTML = Object.entries(CAT).map(([k, v]) =>
    `<button data-k="${k}" class="${k === cat ? 'on' : ''}">${v}</button>`).join('');
@@ -232,7 +247,7 @@ index 5886641..bdfea00 100644
  document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
    cat = b.dataset.k;
    document.querySelectorAll('#cats button').forEach(x => x.classList.toggle('on', x.dataset.k === cat));
-@@ -177,6 +220,7 @@ document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
+@@ -177,6 +228,7 @@ document.querySelectorAll('#cats button').forEach(b => b.onclick = () => {
  $('#txt').oninput = e => $('#n').textContent = e.target.value.length;
  $('#submit').onclick = async () => {
    const body = $('#txt').value.trim();
@@ -240,7 +255,7 @@ index 5886641..bdfea00 100644
    if (!body) return toast('请填写反馈内容');
    const btn = $('#submit'); btn.disabled = true;
    try {
-@@ -185,7 +229,7 @@ $('#submit').onclick = async () => {
+@@ -185,7 +237,7 @@ $('#submit').onclick = async () => {
      if (!fbList.includes(d.fb_id)) { fbList.unshift(d.fb_id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
      toast(d.verdict === 'pass' ? '提交成功，AI 正在处理' : '已受理');
      openChat(d.fb_id);
@@ -249,7 +264,7 @@ index 5886641..bdfea00 100644
    btn.disabled = false;
  };
  
-@@ -200,7 +244,7 @@ async function renderList() {
+@@ -200,7 +252,7 @@ async function renderList() {
        const d = await api('/feedback/api/v1/tickets/' + fb + '?openid=' + encodeURIComponent(openid));
        el.querySelector('.r1 span').outerHTML = chip(d.status);
        const last = (d.replies || []).slice(-1)[0];
@@ -258,7 +273,7 @@ index 5886641..bdfea00 100644
        el.onclick = () => openChat(fb);
      } catch (e) {
        el.querySelector('.r1 span').outerHTML = chip('UNKNOWN');
-@@ -215,19 +259,38 @@ $('#qbtn').onclick = async () => {
+@@ -215,19 +267,38 @@ $('#qbtn').onclick = async () => {
      await api('/feedback/api/v1/tickets/' + id + '?openid=' + encodeURIComponent(openid));
      if (!fbList.includes(id)) { fbList.unshift(id); localStorage.setItem('fb_list', JSON.stringify(fbList)); }
      openChat(id);
@@ -301,7 +316,7 @@ index 5886641..bdfea00 100644
    }).join('');
  }
  async function openChat(fb) {
-@@ -243,8 +306,39 @@ async function refreshChat() {
+@@ -243,8 +314,39 @@ async function refreshChat() {
      const d = await api('/feedback/api/v1/tickets/' + curFb + '?openid=' + encodeURIComponent(openid));
      curTicket = d;
      const closed = d.status === 'CLOSED_AI' || d.status === 'CLOSED_HUMAN';
@@ -342,6 +357,88 @@ index 5886641..bdfea00 100644
      const box = $('#msgs'); box.scrollTop = box.scrollHeight;
      $('#ibar').hidden = closed;
      $('#rate').hidden = !(rated === false && (d.status === 'AI_ANSWERING' || closed));
+diff --git a/h5/login.html b/h5/login.html
+new file mode 100644
+index 0000000..fdc3785
+--- /dev/null
++++ b/h5/login.html
+@@ -0,0 +1,76 @@
++<!DOCTYPE html>
++<html lang="zh-CN">
++<head>
++<meta charset="utf-8">
++<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
++<title>登录 · 微光银行 · 客户服务</title>
++<style>
++:root{--ink:#16243d;--ink2:#4a5a72;--ink3:#8b98ad;--line:#e3e9f0;--bg:#f2f5f9;--blue:#2f6df6;--yellow:#fff4d6;--yellowInk:#8a6d3b}
++*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
++body{margin:0;background:var(--bg);color:var(--ink);
++font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
++min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px}
++.card{width:100%;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:16px;
++box-shadow:0 10px 30px rgba(22,36,61,.06);overflow:hidden}
++.hd{padding:26px 24px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#f8fbff,#fff)}
++.brand{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink3);letter-spacing:.4px}
++.logo{width:26px;height:26px;border-radius:8px;background:var(--ink);color:#fff;display:flex;
++align-items:center;justify-content:center;font-size:14px;font-weight:700}
++h1{margin:14px 0 4px;font-size:21px;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
++.demo-tag{font-size:11px;font-weight:500;color:var(--yellowInk);background:var(--yellow);
++border:1px solid #f2dfae;border-radius:999px;padding:1px 8px;letter-spacing:0}
++.sub{margin:0;font-size:12.5px;color:var(--ink3)}
++.bd{padding:22px 24px 10px}
++.lbl{font-size:12.5px;color:var(--ink2);margin:0 0 7px;font-weight:600}
++input{width:100%;height:46px;border:1px solid var(--line);border-radius:11px;padding:0 13px;
++font-size:15px;color:var(--ink);background:#fbfdff;outline:none;transition:.15s}
++input:focus{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3px rgba(47,109,246,.1)}
++.hint{font-size:12px;color:var(--ink3);margin:8px 0 0;line-height:1.6}
++.btn{width:100%;height:48px;border:none;border-radius:11px;background:var(--ink);color:#fff;
++font-size:15.5px;font-weight:600;letter-spacing:.5px;cursor:pointer;margin-top:18px}
++.btn:active{transform:translateY(1px)}
++.btn.ghost{background:#fff;color:var(--ink2);border:1px solid var(--line);margin-top:10px;font-weight:500}
++.err{color:#d9352b;font-size:12.5px;margin-top:10px;min-height:17px}
++.ft{padding:16px 24px 20px;border-top:1px solid var(--line);background:#fcfdff;
++font-size:11.5px;color:var(--ink3);line-height:1.75}
++.ft b{color:var(--ink2);font-weight:600}
++</style>
++</head>
++<body>
++<div class="card">
++  <div class="hd">
++    <div class="brand"><span class="logo">光</span>微光银行 · 客户服务</div>
++    <h1>客户登录<span class="demo-tag">演示环境</span></h1>
++    <p class="sub">登录后可提交问题，由 AI 客服先行为您解答</p>
++  </div>
++  <div class="bd">
++    <p class="lbl">手机号 / 客户号</p>
++    <input id="acct" inputmode="numeric" autocomplete="off" placeholder="请输入手机号或客户号" value="13800138000">
++    <p class="hint">演示账号已预填，直接点「登录」即可进入。此环境不校验真实身份，请勿填入真实客户信息。</p>
++    <p class="err" id="err"></p>
++    <button class="btn" id="go">登 录</button>
++    <button class="btn ghost" id="emp">员工登录（坐席 / 管理控制台）</button>
++    <p class="hint" style="margin-top:14px">两个入口在登录环节分流：客户账号进客户视图，员工工号进内网控制台。</p>
++  </div>
++  <div class="ft">
++    <b>本页为演示环境，全部客户信息均为合成数据，不含任何真实客户资料</b><br>
++    数据不出内网 · AI 只建议不裁决 · 全链路审计
++  </div>
++</div>
++<script>
++const $ = s => document.querySelector(s);
++const EMP_URL = '/emp';   // 由网关转到内网登录页
++function fail(m){ $('#err').textContent = m; }
++
++$('#go').onclick = () => {
++  const v = ($('#acct').value || '').trim();
++  if (!/^\d{6,20}$/.test(v)) { fail('请输入 6-20 位数字的手机号或客户号'); return; }
++  localStorage.setItem('fb_openid', 'oPoc-' + v);
++  localStorage.setItem('fb_acct', v);
++  location.href = '/app';
++};
++$('#acct').addEventListener('keydown', e => { if (e.key === 'Enter') $('#go').click(); });
++$('#emp').onclick = () => { location.href = EMP_URL; };
++</script>
++</body>
++</html>
 diff --git a/inner/agent.py b/inner/agent.py
 index 1f9ed77..de95915 100644
 --- a/inner/agent.py
@@ -616,6 +713,62 @@ index 2a97d3e..49aa6e3 100644
      if verdict["decision"] != "SHOW_SUGGESTION":
          _persist(request_id, status="HUMAN_HANDOFF")
          return _result(request_id)
+diff --git a/outer/app.py b/outer/app.py
+index 09602fc..02fbf3b 100644
+--- a/outer/app.py
++++ b/outer/app.py
+@@ -18,7 +18,7 @@ from typing import Iterator
+ import httpx
+ from fastapi import Body, FastAPI, HTTPException, Request, Header
+ from fastapi.middleware.cors import CORSMiddleware
+-from fastapi.responses import FileResponse, JSONResponse
++from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+ 
+ from common import audit
+ 
+@@ -31,6 +31,7 @@ from common.config import (
+ # 不能用 Path(__file__).parent.parent——冻结后 __file__ 落在 _internal 里，路径是错的。
+ _H5_DIR = APP_ROOT / "h5"
+ _H5_PAGE = _H5_DIR / "index.html"
++_H5_LOGIN = _H5_DIR / "login.html"
+ from common.crypto import sign, verify
+ from common.schema import FEEDBACK_CATEGORIES
+ 
+@@ -99,9 +100,32 @@ def _now() -> str:
+ 
+ 
+ @app.get("/", include_in_schema=False)
++def demo_login() -> FileResponse:
++    """客户登录页（对外入口即登录，与手机银行已登录状态一致）。
++
++    no-store：演示期间页面会被反复更新，禁掉缓存，避免客户看到上一次的旧页面。
++    """
++    return FileResponse(_H5_LOGIN, headers={"Cache-Control": "no-store, must-revalidate"})
++
++
++@app.get("/app", include_in_schema=False)
+ def demo_home() -> FileResponse:
+-    """手机演示页（H5，与小程序同构）。生产环境小程序走微信正式链路，此页仅为演示入口。"""
+-    return FileResponse(_H5_PAGE)
++    """登录后的客户反馈页（H5，与小程序同构）。未登录时前端会跳回 `/`。"""
++    return FileResponse(_H5_PAGE, headers={"Cache-Control": "no-store, must-revalidate"})
++
++
++@app.get("/emp", include_in_schema=False)
++def emp_portal(request: Request) -> RedirectResponse:
++    """员工入口：浏览器跳到内网控制台登录页（跨域只发生在浏览器侧，外网区不直连内网）。
++
++    取 Host 头优先于 socket 主机名：nginx 反代时 socket 是 127.0.0.1，
++    直接用会让浏览器跳到 127.0.0.1:19096 打不开。
++    """
++    host = (request.headers.get("x-forwarded-host")
++            or request.headers.get("host")
++            or request.url.hostname
++            or "127.0.0.1").split(":")[0]
++    return RedirectResponse(f"http://{host}:19096/", status_code=302)
+ 
+ 
+ @app.middleware("http")
 diff --git a/tests/test_case_fault.py b/tests/test_case_fault.py
 new file mode 100644
 index 0000000..e1d40bd
