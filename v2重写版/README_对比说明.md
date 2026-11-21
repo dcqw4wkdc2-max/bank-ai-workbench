@@ -90,7 +90,7 @@ python app.py --port 18201
 
 ### 真模型实测（2026-11-19 19:55，用 Hermes 里的中转 key）
 
-配置：`https://yyxuetang.com/v1` + `DeepSeek-V4.1-Flash`，`reasoning_effort=none`（关掉思考，省 token），超时 45 秒、超时/5xx 重试一次。
+配置：`https://<中转服务>/v1` + `DeepSeek-V4.1-Flash`，`reasoning_effort=none`（关掉思考，省 token），超时 45 秒、超时/5xx 重试一次。
 
 | 项 | 结果 |
 |---|---|
@@ -103,7 +103,7 @@ python app.py --port 18201
 
 ### 需要注意
 
-- 中转站价格与 DeepSeek 官方不同，实际账单以 `yyxuetang.com` 后台为准；这次用量小到可以忽略。
+- 中转站价格与 DeepSeek 官方不同，实际账单以 `<中转服务>` 后台为准；这次用量小到可以忽略。
 - 思考模型必须 `reasoning_effort=none`，否则内容跑到 `reasoning_content`、`content` 为空（原客户端 `agent.pyc` 的注释也写了这一点）。
 - 服务器上目前**没有放 key**，跑的是模板模式；要开模型，把 `.prov`（base/key/model）放上去后 `python run_model.py --port 18201` 即可。
 
