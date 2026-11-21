@@ -360,10 +360,10 @@ index 5886641..c40e093 100644
      $('#rate').hidden = !(rated === false && (d.status === 'AI_ANSWERING' || closed));
 diff --git a/h5/login.html b/h5/login.html
 new file mode 100644
-index 0000000..060eae3
+index 0000000..c821277
 --- /dev/null
 +++ b/h5/login.html
-@@ -0,0 +1,232 @@
+@@ -0,0 +1,234 @@
 +<!DOCTYPE html>
 +<html lang="zh-CN">
 +<head>
@@ -589,7 +589,9 @@ index 0000000..060eae3
 +  }
 +  if (!v || !$('#p').value) return showErr('请填写账号与口令');
 +  // 员工入口：直接跳内网控制台登录页（同一台机器 19096），由那一侧完成身份校验
-+  location.href = `http://${HOST}:19096/login?portal=${portal}&u=${encodeURIComponent(v)}`;
++  // 员工入口带上演示账号与 demo=1：落到内网登录页时账号口令已填好，点一次就进
++  const d = DEMO[portal];
++  location.href = `http://${HOST}:19096/login?portal=${portal}&u=${encodeURIComponent(v || d.acct)}&demo=1`;
 +};
 +
 +paint();   // 移到末尾：DEMO/paintHint 声明完成后才渲染（原先在此处调用会触发 TDZ）
@@ -1637,7 +1639,7 @@ index d3a629c..2a7ecdf 100644
  }
  
 diff --git a/web/login.html b/web/login.html
-index 1d3e8ca..3385af5 100644
+index 1d3e8ca..2889349 100644
 --- a/web/login.html
 +++ b/web/login.html
 @@ -4,7 +4,7 @@
@@ -1649,10 +1651,14 @@ index 1d3e8ca..3385af5 100644
  <style>
  body{background:var(--bg)}
  .wrap{display:grid;grid-template-columns:minmax(320px,460px) 1fr;min-height:100vh}
-@@ -48,6 +48,12 @@ body{background:var(--bg)}
+@@ -48,6 +48,16 @@ body{background:var(--bg)}
  .err.on{display:block}
  
  .note{font-size:11px;color:var(--ink3);margin-top:26px;border-top:1px solid var(--line);padding-top:14px;line-height:1.65}
++.quick{display:flex;gap:8px;margin-top:14px}
++.qb{flex:1;padding:10px 8px;font-size:12.5px;border:1px solid var(--line2);border-radius:7px;
++background:var(--panel2);color:var(--navy);font-weight:500;transition:.12s}
++.qb:hover{border-color:var(--navy-2);background:#fff}
 +.dhint{margin-top:14px;padding:9px 12px;border:1px dashed var(--line2);border-radius:7px;
 +background:var(--panel2);font-size:11.5px;color:var(--ink2);line-height:1.7}
 +.dhint b{color:var(--navy);font-weight:600}
@@ -1662,7 +1668,15 @@ index 1d3e8ca..3385af5 100644
  
  @media (max-width:820px){.wrap{grid-template-columns:1fr}.side{display:none}}
  </style>
-@@ -100,6 +106,10 @@ body{background:var(--bg)}
+@@ -97,9 +107,18 @@ body{background:var(--bg)}
+         <button class="submit" id="go">登 录</button>
+       </form>
+ 
++      <div class="quick">
++        <button type="button" class="qb" data-u="b001" data-p="abc122333" data-portal="client">一键：坐席演示登录</button>
++        <button type="button" class="qb" data-u="a001" data-p="abc123456" data-portal="admin">一键：管理演示登录</button>
++      </div>
++
        <div class="err" id="err"></div>
  
        <div class="note">账号由管理员统一发放，初始口令首次登录须修改。连续 5 次口令错误将锁定账号 300 秒，登录与越权事件全部进入审计。</div>
@@ -1673,19 +1687,37 @@ index 1d3e8ca..3385af5 100644
      </div>
    </main>
  </div>
-@@ -112,6 +122,11 @@ const COPY = {
+@@ -112,6 +131,29 @@ const COPY = {
  };
  
  let portal = new URLSearchParams(location.search).get('portal') === 'admin' ? 'admin' : 'client';
-+// 从对外入口跳过来时带 ?u=，预填工号（口令仍需手输）
++// 从对外入口跳过来时带 ?u= 与 ?demo=1：演示模式下账号口令都预填，点一次就进
 +(function () {
-+  const u = new URLSearchParams(location.search).get('u');
++  const q = new URLSearchParams(location.search);
++  const u = q.get('u');
 +  if (u) document.getElementById('u').value = u;
++  if (q.get('demo') === '1') {
++    const DEMO = {client:['b001','abc122333'], admin:['a001','abc123456']};
++    const d = DEMO[portal] || DEMO.client;
++    document.getElementById('u').value = u || d[0];
++    document.getElementById('p').value = d[1];
++  }
 +})();
++
++// 一键登录：不用打字，点哪个角色就直接进对应工作台
++document.querySelectorAll('.qb').forEach(b => {
++  b.onclick = () => {
++    portal = b.dataset.portal;               // 按钮决定角色
++    document.getElementById('u').value = b.dataset.u;
++    document.getElementById('p').value = b.dataset.p;
++    document.getElementById('err').classList.remove('on');
++    document.getElementById('form').requestSubmit();
++  };
++});
  
  function paint() {
    document.querySelectorAll('#switch button').forEach(b => b.classList.toggle('on', b.dataset.portal === portal));
-@@ -129,6 +144,12 @@ paint();
+@@ -129,6 +171,12 @@ paint();
  const err = document.getElementById('err');
  function showErr(msg) { err.textContent = msg; err.classList.add('on'); }
  
