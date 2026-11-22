@@ -1,0 +1,86 @@
+{
+  "freeze_time": "2026-11-22 13:23:35",
+  "baseline": "2026-11-22 最终验收版本 v1.5.6",
+  "git": {
+    "交付仓 dcqw4wkdc2-max/bank-ai-workbench": {
+      "branch": "main",
+      "head": "784d156",
+      "remote_verified": true
+    },
+    "补丁分支 dcqw4wkdc2-max/bank-ai-workbench-1": {
+      "branch": "fix/case-fault-and-privacy",
+      "head": "b53a817",
+      "remote_verified": true
+    },
+    "原作者仓 PR": "https://github.com/1708420870/bank-ai-workbench/pull/1 (open)"
+  },
+  "package": {
+    "file": "第4组_银行客服AI工作台_交付物_20261122.zip",
+    "bytes": 10167983,
+    "sha256": "见外置 .zip.sha256（包内含本清单，故打包后计算）",
+    "entries": 245,
+    "integrity": "ok"
+  },
+  "key_files_md5": {
+    "inner/app.py": "667363593bb87a4674782a4eedc5ccfa",
+    "inner/agent.py": "13b0b07df0e10f5bfd223163a10564b6",
+    "inner/kb.py": "9374e1309271f842827e1053c9a82740",
+    "inner/kb_data.json": "86661d9ee7f308c72180227d11c878c7",
+    "outer/app.py": "5d6e03dadda6e9c05314949a1b4a2139",
+    "dmz/app.py": "5040171847422d740a4b247a6fbf079c",
+    "common/egress.py": "83b6a641605b710a4fda6d29150daf66",
+    "inner/privacy.py": "06b74d4094a74780ed74158b9dedaf03",
+    "inner/rules.py": "e83c4889a72ff3f9630ad9c09e2f7871",
+    "inner/service.py": "6046618bc80e5b76bc1b109ffa254743",
+    "h5/login.html": "7c3ec45255ce8c83bf41e159651e2fed",
+    "h5/index.html": "d99782cce9459e91be66f09fed9caa9f",
+    "web/login.html": "fe453ad1dcf6a941a845e05e6f100088",
+    "web/admin.html": "4d754480c9bf313fdc3bbb0a26914e8f"
+  },
+  "server": {
+    "host": "43.138.192.118",
+    "services": "banksrc-inner/dmz/outer active",
+    "ports_public": {
+      "19092": "closed",
+      "19093": "closed",
+      "19094": "200",
+      "19096": "302"
+    },
+    "model": "deepseek-chat",
+    "secrets": {
+      "model.env": "600 root:root",
+      "secrets.env": "600 root:root"
+    },
+    "db": {
+      "rules": 8,
+      "users": 6
+    }
+  },
+  "test_evidence": {
+    "pytest": "129 passed",
+    "cases": "12/12",
+    "kb_index": 24,
+    "kb_citation": "KB-TXN-02 / KB-DISPUTE-02 / KB-PHONE-01 实测命中",
+    "security": {
+      "无令牌提交": 401,
+      "跨会话复原": 403,
+      "MCP越权": 403,
+      "证件号回显": "否"
+    }
+  },
+  "credentials_rotated": {
+    "b001": "Teller26A1",
+    "b002": "Teller26A2",
+    "b003": "Teller26A3",
+    "b004": "Teller26A4",
+    "a001": "Admin26A1",
+    "t001": "Dev2026Aa1（登录受限 403）",
+    "旧口令": "全部 401"
+  },
+  "open_items": [
+    "DeepSeek Key 轮换（待你用 E:\\newkey.txt 安全提供）",
+    "第三方盲测与换人签字",
+    "MCP 首次调用 503 预热",
+    "源码种子口令仍为旧值（新建库时使用）"
+  ]
+}
