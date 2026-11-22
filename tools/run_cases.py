@@ -34,7 +34,7 @@ def main():
     ap.add_argument("--base", required=True)
     ap.add_argument("--basic", default="", help="nginx Basic Auth，user:pass")
     ap.add_argument("--user", default="b001")
-    ap.add_argument("--password", default="abc122333")
+    ap.add_argument("--password", default="Teller26A1")
     a = ap.parse_args()
     base = a.base.rstrip("/")
     H = {}
